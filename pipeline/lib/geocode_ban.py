@@ -18,6 +18,7 @@ equivalent dans les tests). Aucune autre methode n'est requise.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 BAN_SEARCH_URL = "https://api-adresse.data.gouv.fr/search/"
@@ -80,13 +81,23 @@ def load_cache(path: str | Path) -> dict[str, dict | None]:
 
 
 def save_cache(path: str | Path, entries: dict[str, dict | None]) -> None:
-    """Ecrit l'integralite du cache sur disque, une entree JSON par ligne."""
+    """Ecrit l'integralite du cache sur disque, une entree JSON par ligne.
+
+    Ecriture atomique : le contenu est d'abord ecrit dans un fichier temporaire
+    puis bascule sur la cible via os.replace (atomique sur POSIX et Windows).
+    Sans ca, un crash/kill en cours d'ecriture (Ctrl+C pendant un batch de
+    geocodage, OOM, etc.) laisserait le cache tronque ou avec une ligne
+    malformee, et load_cache leverait json.JSONDecodeError au run suivant —
+    perte de tout le cache accumule, pas seulement de la derniere entree.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with tmp_path.open("w", encoding="utf-8") as f:
         for address, result in entries.items():
             f.write(json.dumps({"address": address, "result": result}, ensure_ascii=False))
             f.write("\n")
+    os.replace(tmp_path, path)
 
 
 def geocode_address(client, address: str, cache: GeocodeCache) -> dict | None:

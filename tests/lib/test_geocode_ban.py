@@ -162,3 +162,33 @@ def test_save_cache_ecrit_un_jsonl_valide_ligne_par_ligne(cache_path):
     for line in lines:
         row = json.loads(line)
         assert "address" in row and "result" in row
+
+
+def test_save_cache_ne_laisse_pas_de_fichier_tmp_apres_une_ecriture_reussie(cache_path):
+    save_cache(cache_path, {"a": {"lat": 1.0, "lon": 2.0}})
+
+    tmp_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
+    assert not tmp_path.exists()
+    assert cache_path.exists()
+
+
+def test_save_cache_preserve_le_cache_existant_si_l_ecriture_est_interrompue(
+    cache_path, monkeypatch
+):
+    """Simule un crash entre l'ecriture du fichier temporaire et le bascule
+    atomique (os.replace) : le cache existant doit rester intact et lisible,
+    pas tronque/corrompu."""
+    save_cache(cache_path, {"a": {"lat": 1.0, "lon": 2.0}})
+    original_content = cache_path.read_text(encoding="utf-8")
+
+    def boom(*args, **kwargs):
+        raise OSError("simulated crash during atomic replace")
+
+    monkeypatch.setattr("pipeline.lib.geocode_ban.os.replace", boom)
+
+    with pytest.raises(OSError):
+        save_cache(cache_path, {"a": {"lat": 1.0, "lon": 2.0}, "b": None})
+
+    # Le cache d'origine n'a pas ete touche : toujours present et intact.
+    assert cache_path.read_text(encoding="utf-8") == original_content
+    assert load_cache(cache_path) == {"a": {"lat": 1.0, "lon": 2.0}}
