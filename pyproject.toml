@@ -1,0 +1,23 @@
+[project]
+name = "dvf-dpe-pays-basque"
+version = "0.1.0"
+description = "Croisement DVF x DPE sur le littoral Pays Basque + BAB elargi"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
