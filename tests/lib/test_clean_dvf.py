@@ -7,6 +7,7 @@ from pipeline.lib.clean_dvf import (
     EXCLUDED_ZERO_PRICE,
     EXCLUDED_ZERO_SURFACE,
     KEPT,
+    build_geocoding_query,
     classify_row,
     compose_address,
     parse_french_decimal,
@@ -88,3 +89,33 @@ class TestClassifyRow:
 
     def test_both_none_reports_price_first(self):
         assert classify_row(None, None) == EXCLUDED_ZERO_PRICE
+
+
+class TestBuildGeocodingQuery:
+    def test_composes_address_postcode_commune(self):
+        row = {
+            "adresse_brute": "21 RUE PETRICOT",
+            "code_postal": "64200",
+            "commune": "BIARRITZ",
+        }
+        assert build_geocoding_query(row) == "21 RUE PETRICOT 64200 BIARRITZ"
+
+    def test_missing_postal_code_skipped(self):
+        row = {"adresse_brute": "21 RUE PETRICOT", "code_postal": None, "commune": "BIARRITZ"}
+        assert build_geocoding_query(row) == "21 RUE PETRICOT BIARRITZ"
+
+    def test_missing_commune_skipped(self):
+        row = {"adresse_brute": "21 RUE PETRICOT", "code_postal": "64200", "commune": None}
+        assert build_geocoding_query(row) == "21 RUE PETRICOT 64200"
+
+    def test_no_address_returns_none(self):
+        row = {"adresse_brute": "", "code_postal": "64200", "commune": "BIARRITZ"}
+        assert build_geocoding_query(row) is None
+
+    def test_none_address_returns_none(self):
+        row = {"adresse_brute": None, "code_postal": "64200", "commune": "BIARRITZ"}
+        assert build_geocoding_query(row) is None
+
+    def test_whitespace_collapsed(self):
+        row = {"adresse_brute": "21  RUE   PETRICOT", "code_postal": "64200", "commune": "BIARRITZ"}
+        assert build_geocoding_query(row) == "21 RUE PETRICOT 64200 BIARRITZ"

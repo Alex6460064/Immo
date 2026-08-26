@@ -33,6 +33,10 @@ Design choices (documented per CLAUDE.md -- no silent assumptions):
 
 from __future__ import annotations
 
+import re
+
+_WHITESPACE_RE = re.compile(r"\s+")
+
 KEPT = "kept"
 EXCLUDED_ZERO_PRICE = "excluded_zero_price"
 EXCLUDED_ZERO_SURFACE = "excluded_zero_surface"
@@ -88,3 +92,31 @@ def classify_row(price: float | None, surface: float | None) -> str:
     if surface is None or surface == 0:
         return EXCLUDED_ZERO_SURFACE
     return KEPT
+
+
+def build_geocoding_query(row: dict) -> str | None:
+    """Build the address string submitted to the BAN API for geocoding.
+
+    Enriched with postcode + commune (same design decision as DPE's
+    `pipeline.lib.clean_dpe.build_geocoding_query`, see that module's docstring):
+    the street address alone (`adresse_brute`) is often ambiguous across communes
+    (e.g. "Rue de la Paix" exists in several), so the BAN query adds the postal
+    code and commune name -- distinct from `adresse_normalisee`, which stays a
+    clean street-only key for the DVF x DPE text-match join. Returns None if
+    `adresse_brute` is empty -- nothing to geocode for that row.
+    """
+    adresse_brute = (row.get("adresse_brute") or "").strip()
+    if not adresse_brute:
+        return None
+
+    parts = [_WHITESPACE_RE.sub(" ", adresse_brute).strip()]
+
+    code_postal = (row.get("code_postal") or "").strip() if row.get("code_postal") else None
+    if code_postal:
+        parts.append(code_postal)
+
+    commune = (row.get("commune") or "").strip()
+    if commune:
+        parts.append(commune)
+
+    return " ".join(parts)
