@@ -140,10 +140,14 @@ def download_and_filter_year(year: int, url: str, codes_insee: list[str], data_d
 
         con = duckdb.connect()
         txt_path_posix = str(txt_path).replace("\\", "/")
+        # "Code commune" n'est PAS zero-pad sur 3 chiffres dans le fichier brut DGFiP
+        # (ex. Anglet '24', pas '024') -- verifie en direct sur le millesime 2021.
+        # Sans LPAD, la concatenation departement+commune ne matche jamais les codes
+        # INSEE < 100 de config/communes.py, et la commune disparait silencieusement.
         select_sql = f"""
             SELECT *
             FROM read_csv('{txt_path_posix}', delim='|', header=true, all_varchar=true)
-            WHERE "Code departement" || "Code commune" IN ({codes_list})
+            WHERE "Code departement" || LPAD("Code commune", 3, '0') IN ({codes_list})
         """
         _write_parquet_literal(con, select_sql, output_path)
         row = con.execute(_YEAR_SUMMARY_QUERY, [str(output_path)]).fetchone()
