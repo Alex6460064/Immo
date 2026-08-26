@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 
 BAN_SEARCH_URL = "https://api-adresse.data.gouv.fr/search/"
@@ -80,7 +81,13 @@ def load_cache(path: str | Path) -> dict[str, dict | None]:
     return entries
 
 
-def save_cache(path: str | Path, entries: dict[str, dict | None]) -> None:
+def save_cache(
+    path: str | Path,
+    entries: dict[str, dict | None],
+    *,
+    max_replace_attempts: int = 5,
+    retry_delay_s: float = 0.2,
+) -> None:
     """Ecrit l'integralite du cache sur disque, une entree JSON par ligne.
 
     Ecriture atomique : le contenu est d'abord ecrit dans un fichier temporaire
@@ -89,6 +96,13 @@ def save_cache(path: str | Path, entries: dict[str, dict | None]) -> None:
     geocodage, OOM, etc.) laisserait le cache tronque ou avec une ligne
     malformee, et load_cache leverait json.JSONDecodeError au run suivant —
     perte de tout le cache accumule, pas seulement de la derniere entree.
+
+    os.replace retente sur PermissionError (observe en conditions reelles :
+    WinError 5 "Acces refuse" quand ce fichier vit dans un dossier synchronise
+    OneDrive, qui peut le verrouiller brievement pendant sa propre synchro --
+    ce cache est reecrit en entier a chaque adresse geocodee, donc frequemment
+    sur un run complet). Un echec persistant au-dela de `max_replace_attempts`
+    est toujours leve, pas avale silencieusement.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -97,7 +111,15 @@ def save_cache(path: str | Path, entries: dict[str, dict | None]) -> None:
         for address, result in entries.items():
             f.write(json.dumps({"address": address, "result": result}, ensure_ascii=False))
             f.write("\n")
-    os.replace(tmp_path, path)
+
+    for attempt in range(1, max_replace_attempts + 1):
+        try:
+            os.replace(tmp_path, path)
+            return
+        except PermissionError:
+            if attempt == max_replace_attempts:
+                raise
+            time.sleep(retry_delay_s)
 
 
 def geocode_address(client, address: str, cache: GeocodeCache) -> dict | None:

@@ -3,6 +3,7 @@ pour ne jamais re-interroger inutilement une API publique soumise a rate limitin
 Aucun appel reseau reel ici : le client HTTP est un stub injecte."""
 
 import json
+import os
 
 import pytest
 
@@ -192,3 +193,42 @@ def test_save_cache_preserve_le_cache_existant_si_l_ecriture_est_interrompue(
     # Le cache d'origine n'a pas ete touche : toujours present et intact.
     assert cache_path.read_text(encoding="utf-8") == original_content
     assert load_cache(cache_path) == {"a": {"lat": 1.0, "lon": 2.0}}
+
+
+def test_save_cache_retente_sur_permissionerror_transitoire_puis_reussit(
+    cache_path, monkeypatch
+):
+    """Sur un dossier synchronise OneDrive, os.replace peut echouer avec
+    PermissionError (WinError 5) le temps que OneDrive relache un verrou --
+    observe en conditions reelles pendant un run de geocodage complet. save_cache
+    doit retenter quelques fois plutot que de faire echouer tout le run."""
+    real_replace = os.replace
+    calls = {"n": 0}
+
+    def flaky_replace(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise PermissionError("simulated transient OneDrive lock")
+        return real_replace(*args, **kwargs)
+
+    monkeypatch.setattr("pipeline.lib.geocode_ban.os.replace", flaky_replace)
+
+    save_cache(cache_path, {"a": {"lat": 1.0, "lon": 2.0}})
+
+    assert calls["n"] == 3
+    assert load_cache(cache_path) == {"a": {"lat": 1.0, "lon": 2.0}}
+
+
+def test_save_cache_leve_apres_epuisement_des_tentatives_sur_permissionerror(
+    cache_path, monkeypatch
+):
+    """Si le verrou ne se relache jamais, save_cache doit finir par abandonner et
+    lever -- pas boucler indefiniment."""
+
+    def always_locked(*args, **kwargs):
+        raise PermissionError("simulated permanent lock")
+
+    monkeypatch.setattr("pipeline.lib.geocode_ban.os.replace", always_locked)
+
+    with pytest.raises(PermissionError):
+        save_cache(cache_path, {"a": {"lat": 1.0, "lon": 2.0}}, retry_delay_s=0)
