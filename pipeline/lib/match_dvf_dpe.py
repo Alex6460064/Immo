@@ -129,24 +129,52 @@ def dedup_dpe(dpe_candidats: list[dict]) -> list[dict]:
     return kept
 
 
-def _surface_tiebreak(mutation: dict, candidats: list[dict], methode: str) -> MatchResult:
-    """Passe 3 : garde le DPE candidat dont la surface est a +/- SURFACE_TOLERANCE_M2
-    de la surface de la mutation. Un seul -> trouve ; sinon -> ambigu."""
+# Filtre C (spec §4) : type_local DVF -> type_batiment DPE tenu pour contradictoire.
+# `immeuble` (DPE collectif) n'est jamais contradictoire -> toujours conserve.
+_TYPE_CONTRADICTION = {"Appartement": "maison", "Maison": "appartement"}
+
+
+def _type_filter(pool: list[dict], type_local: str | None) -> tuple[list[dict], bool]:
+    """Filtre C : sur un pool > 1, retire les DPE dont `type_batiment` contredit
+    `type_local`. narrow-only (D1) : si le filtre viderait le pool, on rend le pool
+    d'origine -- C ne cree jamais un non-appariement. Retourne (pool, a_retire)."""
+    contradiction = _TYPE_CONTRADICTION.get(type_local or "")
+    if contradiction is None:
+        return pool, False
+    filtered = [d for d in pool if d.get("type_batiment") != contradiction]
+    if not filtered or len(filtered) == len(pool):
+        return pool, False
+    return filtered, True
+
+
+def _surface_within(mutation: dict, candidats: list[dict]) -> list[dict]:
+    """Passe 3 : DPE candidats dont la surface est a +/- SURFACE_TOLERANCE_M2 de
+    celle de la mutation. Liste vide si la surface de la mutation est absente."""
     surface_mutation = mutation.get("surface")
     if surface_mutation is None:
-        return MatchResult("ambigu", None, None)
-
-    within = [
+        return []
+    return [
         d
         for d in candidats
         if d.get("surface_habitable_logement") is not None
         and abs(d["surface_habitable_logement"] - surface_mutation) <= SURFACE_TOLERANCE_M2
     ]
+
+
+def _surface_tiebreak(
+    mutation: dict, candidats: list[dict], methode: str, filtre_type: bool
+) -> MatchResult:
+    """Passe 3 : un seul candidat dans la tolerance de surface -> trouve ; sinon -> ambigu."""
+    within = _surface_within(mutation, candidats)
     if len(within) == 1:
         return MatchResult(
-            "trouve", within[0].get("numero_dpe"), f"{methode}_surface", **_context(within[0])
+            "trouve",
+            within[0].get("numero_dpe"),
+            f"{methode}_surface",
+            filtre_type_applique=filtre_type,
+            **_context(within[0]),
         )
-    return MatchResult("ambigu", None, None)
+    return MatchResult("ambigu", None, None, filtre_type_applique=filtre_type)
 
 
 def _bbox_half_widths(lat: float, seuil_distance_m: float) -> tuple[float, float]:
@@ -176,20 +204,33 @@ def _within_distance(
     return near
 
 
+def _resolve_pool(mutation: dict, pool: list[dict], methode: str) -> MatchResult:
+    """Pool multi-candidats (passe 1 texte exact >1, ou passe 2 distance >1) :
+    filtre C `type_batiment` (narrow-only) -> passe 3 surface -> passe 4 consensus."""
+    pool, filtre_type = _type_filter(pool, mutation.get("type_local"))
+    if len(pool) == 1:
+        d = pool[0]
+        return MatchResult(
+            "trouve", d.get("numero_dpe"), methode, filtre_type_applique=filtre_type, **_context(d)
+        )
+    return _surface_tiebreak(mutation, pool, methode, filtre_type)
+
+
 def _resolve(mutation: dict, exact: list[dict], near: list[dict]) -> MatchResult:
-    """Applique passes 1->2->3 a partir des sous-ensembles deja calcules :
+    """Applique passes 1->2->3(->4) a partir des sous-ensembles deja calcules :
     `exact` = DPE a adresse_normalisee identique, `near` = DPE geocodes a <= seuil
     (liste vide si la mutation n'a pas de coordonnees : la passe 2 ne trouve rien)."""
     if len(exact) == 1:
         d = exact[0]
         return MatchResult("trouve", d.get("numero_dpe"), "texte_exact", **_context(d))
-    if len(exact) > 1:
-        return _surface_tiebreak(mutation, exact, "texte_exact")
+    if exact:
+        return _resolve_pool(mutation, exact, "texte_exact")
 
     if len(near) == 1:
-        return MatchResult("trouve", near[0].get("numero_dpe"), "distance", **_context(near[0]))
-    if len(near) > 1:
-        return _surface_tiebreak(mutation, near, "distance")
+        d = near[0]
+        return MatchResult("trouve", d.get("numero_dpe"), "distance", **_context(d))
+    if near:
+        return _resolve_pool(mutation, near, "distance")
     return MatchResult("non_trouve", None, None)
 
 

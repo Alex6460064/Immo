@@ -53,12 +53,13 @@ def _dpe(
     }
 
 
-def _mutation(adresse="", lat=None, lon=None, surface=None):
+def _mutation(adresse="", lat=None, lon=None, surface=None, *, type_local=None):
     return {
         "adresse_normalisee": adresse,
         "lat": lat,
         "lon": lon,
         "surface": surface,
+        "type_local": type_local,
     }
 
 
@@ -232,6 +233,68 @@ class TestPass1ExactText:
         ]
         result = classify_match(_mutation("5 RUE DES PECHEURS", surface=None), candidates, 15)
         assert result.status == "ambigu"
+
+
+class TestTypeFilterC:
+    """Filtre C (spec §4) : sur un pool > 1, retire les DPE dont `type_batiment`
+    contredit `type_local` DVF. Departageur, jamais validateur : ne s'applique
+    pas a un candidat unique et ne cree jamais de non-appariement (narrow-only, D1)."""
+
+    def test_contradicting_maison_removed_from_appartement_pool(self):
+        candidates = [
+            _dpe("D1", "5 RUE A", surface=50.0, type_batiment="appartement", etiquette="C"),
+            _dpe("D2", "5 RUE A", surface=50.0, type_batiment="maison", etiquette="F"),
+        ]
+        result = classify_match(
+            _mutation("5 RUE A", surface=50.0, type_local="Appartement"), candidates, 15
+        )
+        assert result.status == "trouve"
+        assert result.numero_dpe == "D1"
+        assert result.filtre_type_applique is True
+
+    def test_immeuble_is_kept_against_appartement(self):
+        candidates = [
+            _dpe("D1", "5 RUE A", surface=50.0, type_batiment="maison"),
+            _dpe("D2", "5 RUE A", surface=50.0, type_batiment="immeuble", etiquette="D"),
+        ]
+        result = classify_match(
+            _mutation("5 RUE A", surface=50.0, type_local="Appartement"), candidates, 15
+        )
+        assert result.status == "trouve"
+        assert result.numero_dpe == "D2"
+
+    def test_narrow_only_when_filter_would_empty_the_pool(self):
+        # Both candidates contradict the type -> filter would empty -> pool kept as-is.
+        candidates = [
+            _dpe("D1", "5 RUE A", surface=79.0, type_batiment="maison"),
+            _dpe("D2", "5 RUE A", surface=81.0, type_batiment="maison"),
+        ]
+        result = classify_match(
+            _mutation("5 RUE A", surface=80.0, type_local="Appartement"), candidates, 15
+        )
+        assert result.status == "ambigu"
+        assert result.filtre_type_applique is False
+
+    def test_not_applied_to_a_single_contradicting_candidate(self):
+        candidates = [_dpe("D1", "5 RUE A", type_batiment="maison", etiquette="E")]
+        result = classify_match(
+            _mutation("5 RUE A", type_local="Appartement"), candidates, 15
+        )
+        assert result.status == "trouve"
+        assert result.numero_dpe == "D1"
+        assert result.filtre_type_applique is False
+
+    def test_no_filter_when_type_local_is_neither_maison_nor_appartement(self):
+        candidates = [
+            _dpe("D1", "5 RUE A", surface=50.0, type_batiment="maison"),
+            _dpe("D2", "5 RUE A", surface=90.0, type_batiment="appartement"),
+        ]
+        result = classify_match(
+            _mutation("5 RUE A", surface=50.0, type_local="Local industriel"), candidates, 15
+        )
+        assert result.status == "trouve"
+        assert result.numero_dpe == "D1"
+        assert result.filtre_type_applique is False
 
 
 class TestPass2Distance:
