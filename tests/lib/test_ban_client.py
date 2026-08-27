@@ -46,9 +46,7 @@ def test_cache_hit_none_is_not_found():
 
 def test_success_on_first_call(monkeypatch):
     cache = _Cache()
-    monkeypatch.setattr(
-        ban_client, "geocode_address", lambda *_a: {"lat": 1.0, "lon": 2.0}
-    )
+    monkeypatch.setattr(ban_client, "geocode_address", lambda *_a: {"lat": 1.0, "lon": 2.0})
     status, coords = geocode_with_retry(object(), "addr", cache)
     assert status == "found"
     assert coords == {"lat": 1.0, "lon": 2.0}

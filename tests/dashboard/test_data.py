@@ -168,10 +168,18 @@ class TestMarketTrend:
 
 class TestFilterIris:
     _ROWS = [
-        {"code_iris": "640240115", "nom_iris": "Pontots", "type_local": "Maison",
-         "moyenne": 6000.0},
-        {"code_iris": "640240116", "nom_iris": "Cinq Cantons", "type_local": "Appartement",
-         "moyenne": 7000.0},
+        {
+            "code_iris": "640240115",
+            "nom_iris": "Pontots",
+            "type_local": "Maison",
+            "moyenne": 6000.0,
+        },
+        {
+            "code_iris": "640240116",
+            "nom_iris": "Cinq Cantons",
+            "type_local": "Appartement",
+            "moyenne": 7000.0,
+        },
         {"code_iris": "641220101", "nom_iris": "Centre", "type_local": "Maison", "moyenne": 9000.0},
         {"code_iris": "402090000", "nom_iris": "Ondres", "type_local": "Maison", "moyenne": 4000.0},
     ]
@@ -191,12 +199,30 @@ class TestFilterIris:
 
 class TestIrisMapValues:
     _ROWS = [
-        {"code_iris": "640240115", "nom_iris": "Pontots", "type_local": "Maison",
-         "n": 10, "moyenne": 9000.0, "mediane": 4000.0},
-        {"code_iris": "640240115", "nom_iris": "Pontots", "type_local": "Appartement",
-         "n": 30, "moyenne": 8000.0, "mediane": 6500.0},
-        {"code_iris": "402090000", "nom_iris": "Ondres", "type_local": "Maison",
-         "n": 5, "moyenne": 3000.0, "mediane": 2900.0},
+        {
+            "code_iris": "640240115",
+            "nom_iris": "Pontots",
+            "type_local": "Maison",
+            "n": 10,
+            "moyenne": 9000.0,
+            "mediane": 4000.0,
+        },
+        {
+            "code_iris": "640240115",
+            "nom_iris": "Pontots",
+            "type_local": "Appartement",
+            "n": 30,
+            "moyenne": 8000.0,
+            "mediane": 6500.0,
+        },
+        {
+            "code_iris": "402090000",
+            "nom_iris": "Ondres",
+            "type_local": "Maison",
+            "n": 5,
+            "moyenne": 3000.0,
+            "mediane": 2900.0,
+        },
     ]
 
     def test_returns_median_of_selected_type(self):
@@ -234,12 +260,27 @@ class TestColorRange:
 
 class TestFilterMatched:
     _ROWS = [
-        {"commune": "ANGLET", "date_mutation": "2018-03-01", "type_local": "Maison",
-         "etiquette_dpe": "D", "match_status": "trouve"},
-        {"commune": "ANGLET", "date_mutation": "2022-06-01", "type_local": "Appartement",
-         "etiquette_dpe": "F", "match_status": "trouve"},
-        {"commune": "BIARRITZ", "date_mutation": "2023-01-01", "type_local": "Maison",
-         "etiquette_dpe": "D", "match_status": "resolu_consensus"},
+        {
+            "commune": "ANGLET",
+            "date_mutation": "2018-03-01",
+            "type_local": "Maison",
+            "etiquette_dpe": "D",
+            "match_status": "trouve",
+        },
+        {
+            "commune": "ANGLET",
+            "date_mutation": "2022-06-01",
+            "type_local": "Appartement",
+            "etiquette_dpe": "F",
+            "match_status": "trouve",
+        },
+        {
+            "commune": "BIARRITZ",
+            "date_mutation": "2023-01-01",
+            "type_local": "Maison",
+            "etiquette_dpe": "D",
+            "match_status": "resolu_consensus",
+        },
     ]
 
     def test_commune(self):
@@ -268,8 +309,13 @@ class TestImpactDpeAggregate:
 
     def _row(self, commune, date, typ, etiq, status, prix, surface):
         return {
-            "commune": commune, "date_mutation": date, "type_local": typ,
-            "etiquette_dpe": etiq, "match_status": status, "prix": prix, "surface": surface,
+            "commune": commune,
+            "date_mutation": date,
+            "type_local": typ,
+            "etiquette_dpe": etiq,
+            "match_status": status,
+            "prix": prix,
+            "surface": surface,
         }
 
     def test_groups_by_dpe_group_and_type(self):
@@ -326,8 +372,13 @@ class TestImpactDpeAggregate:
 class TestImpactDpeBreakdown:
     def _row(self, date, status, prix=300_000, surface=60):
         return {
-            "commune": "ANGLET", "date_mutation": date, "type_local": "Maison",
-            "etiquette_dpe": "D", "match_status": status, "prix": prix, "surface": surface,
+            "commune": "ANGLET",
+            "date_mutation": date,
+            "type_local": "Maison",
+            "etiquette_dpe": "D",
+            "match_status": status,
+            "prix": prix,
+            "surface": surface,
         }
 
     def test_counts_trouve_and_consensus_after_cutoff(self):
@@ -362,39 +413,96 @@ class TestLoaders:
         p = tmp_path / "agg_marche.parquet"
         _write(
             p,
-            [{"commune": "ANGLET", "annee": "2022", "type_local": "Maison",
-              "n": 3, "moyenne": 5000.0, "mediane": 4800.0}],
-            {"commune": "VARCHAR", "annee": "VARCHAR", "type_local": "VARCHAR",
-             "n": "BIGINT", "moyenne": "DOUBLE", "mediane": "DOUBLE"},
+            [
+                {
+                    "commune": "ANGLET",
+                    "annee": "2022",
+                    "type_local": "Maison",
+                    "n": 3,
+                    "moyenne": 5000.0,
+                    "mediane": 4800.0,
+                }
+            ],
+            {
+                "commune": "VARCHAR",
+                "annee": "VARCHAR",
+                "type_local": "VARCHAR",
+                "n": "BIGINT",
+                "moyenne": "DOUBLE",
+                "mediane": "DOUBLE",
+            },
         )
         rows = load_agg_marche(p)
-        assert rows == [{"commune": "ANGLET", "annee": "2022", "type_local": "Maison",
-                         "n": 3, "moyenne": 5000.0, "mediane": 4800.0}]
+        assert rows == [
+            {
+                "commune": "ANGLET",
+                "annee": "2022",
+                "type_local": "Maison",
+                "n": 3,
+                "moyenne": 5000.0,
+                "mediane": 4800.0,
+            }
+        ]
 
     def test_load_agg_iris(self, tmp_path):
         p = tmp_path / "agg_iris.parquet"
         _write(
             p,
-            [{"code_iris": "402090000", "nom_iris": "Ondres", "type_local": "Maison",
-              "n": 10, "moyenne": 4000.0, "mediane": 3800.0}],
-            {"code_iris": "VARCHAR", "nom_iris": "VARCHAR", "type_local": "VARCHAR",
-             "n": "BIGINT", "moyenne": "DOUBLE", "mediane": "DOUBLE"},
+            [
+                {
+                    "code_iris": "402090000",
+                    "nom_iris": "Ondres",
+                    "type_local": "Maison",
+                    "n": 10,
+                    "moyenne": 4000.0,
+                    "mediane": 3800.0,
+                }
+            ],
+            {
+                "code_iris": "VARCHAR",
+                "nom_iris": "VARCHAR",
+                "type_local": "VARCHAR",
+                "n": "BIGINT",
+                "moyenne": "DOUBLE",
+                "mediane": "DOUBLE",
+            },
         )
         assert load_agg_iris(p)[0]["nom_iris"] == "Ondres"
 
     def test_load_matched_and_counts(self, tmp_path):
         p = tmp_path / "dvf_dpe_matched.parquet"
         rows = [
-            {"commune": "ANGLET", "date_mutation": "2022-01-01", "type_local": "Maison",
-             "surface": 60.0, "prix": 300000.0, "match_status": "trouve", "etiquette_dpe": "D"},
-            {"commune": "ANGLET", "date_mutation": "2022-02-01", "type_local": "Maison",
-             "surface": 50.0, "prix": 200000.0, "match_status": "ambigu", "etiquette_dpe": None},
+            {
+                "commune": "ANGLET",
+                "date_mutation": "2022-01-01",
+                "type_local": "Maison",
+                "surface": 60.0,
+                "prix": 300000.0,
+                "match_status": "trouve",
+                "etiquette_dpe": "D",
+            },
+            {
+                "commune": "ANGLET",
+                "date_mutation": "2022-02-01",
+                "type_local": "Maison",
+                "surface": 50.0,
+                "prix": 200000.0,
+                "match_status": "ambigu",
+                "etiquette_dpe": None,
+            },
         ]
         _write(
-            p, rows,
-            {"commune": "VARCHAR", "date_mutation": "VARCHAR", "type_local": "VARCHAR",
-             "surface": "DOUBLE", "prix": "DOUBLE", "match_status": "VARCHAR",
-             "etiquette_dpe": "VARCHAR"},
+            p,
+            rows,
+            {
+                "commune": "VARCHAR",
+                "date_mutation": "VARCHAR",
+                "type_local": "VARCHAR",
+                "surface": "DOUBLE",
+                "prix": "DOUBLE",
+                "match_status": "VARCHAR",
+                "etiquette_dpe": "VARCHAR",
+            },
         )
         assert len(load_matched(p)) == 2
         assert load_matching_counts(p) == {"trouve": 1, "ambigu": 1}

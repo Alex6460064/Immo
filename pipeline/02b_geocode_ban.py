@@ -40,9 +40,7 @@ from pipeline.lib.geocode_ban import GeocodeCache  # noqa: E402
 from pipeline.lib.parquet_io import read_parquet_rows, write_parquet_rows  # noqa: E402
 
 INPUT_PATH = Path(__file__).resolve().parent.parent / "data" / "processed" / "dvf_clean.parquet"
-OUTPUT_PATH = (
-    Path(__file__).resolve().parent.parent / "data" / "processed" / "dvf_geocoded.parquet"
-)
+OUTPUT_PATH = Path(__file__).resolve().parent.parent / "data" / "processed" / "dvf_geocoded.parquet"
 # Voir "Choix documente : emplacement du cache de geocodage BAN" en tete de fichier --
 # meme chemin que pipeline/03_clean_dpe.py, pour un cache partage DVF/DPE.
 GEOCODE_CACHE_PATH = (
@@ -106,9 +104,7 @@ def main() -> None:
     print(f"    - sans adresse exploitable (non tente) : {stats['no_address']}")
     print(f"    - trouve                                : {stats['found']}")
     print(f"    - non trouve (API BAN, aucun resultat)  : {stats['not_found']}")
-    print(
-        f"    - erreur reseau persistante (a re-tenter au prochain run) : {stats['error']}"
-    )
+    print(f"    - erreur reseau persistante (a re-tenter au prochain run) : {stats['error']}")
     print(
         f"    - taux de succes / tentatives ({attempted} adresses interrogees) : "
         f"{success_rate:.1f}%"

@@ -195,9 +195,7 @@ def test_save_cache_preserve_le_cache_existant_si_l_ecriture_est_interrompue(
     assert load_cache(cache_path) == {"a": {"lat": 1.0, "lon": 2.0}}
 
 
-def test_save_cache_retente_sur_permissionerror_transitoire_puis_reussit(
-    cache_path, monkeypatch
-):
+def test_save_cache_retente_sur_permissionerror_transitoire_puis_reussit(cache_path, monkeypatch):
     """Sur un dossier synchronise OneDrive, os.replace peut echouer avec
     PermissionError (WinError 5) le temps que OneDrive relache un verrou --
     observe en conditions reelles pendant un run de geocodage complet. save_cache

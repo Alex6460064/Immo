@@ -118,8 +118,7 @@ class TestRequireDownstreamColumns:
     def test_identifiant_document_non_aliase_rejete(self):
         # "Code service CH" pas encore renomme -> la colonne aval manque.
         brut = [
-            "Code service CH" if c == "Identifiant de document" else c
-            for c in _DOWNSTREAM_COLUMNS
+            "Code service CH" if c == "Identifiant de document" else c for c in _DOWNSTREAM_COLUMNS
         ]
         with pytest.raises(ValueError, match="Identifiant de document"):
             require_downstream_columns(brut)

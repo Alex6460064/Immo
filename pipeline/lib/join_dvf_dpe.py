@@ -85,8 +85,7 @@ def match_all(
     `numero_dpe` est NULL mais l'etiquette est connue par consensus.
     """
     index_by_commune = {
-        code: build_dpe_index(rows, seuil_distance_m)
-        for code, rows in dpe_by_commune.items()
+        code: build_dpe_index(rows, seuil_distance_m) for code, rows in dpe_by_commune.items()
     }
     empty_index = build_dpe_index([], seuil_distance_m)
 

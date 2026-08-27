@@ -53,6 +53,7 @@ DVF_PATH = ROOT / "data" / "processed" / "dvf_geocoded.parquet"
 DPE_PATH = ROOT / "data" / "processed" / "dpe_clean.parquet"
 OUTPUT_PATH = ROOT / "data" / "processed" / "dvf_dpe_matched.parquet"
 
+
 def _require_columns(path: Path, columns: list[str], producer: str) -> None:
     """Sort avec un message clair si `path` n'a pas toutes les `columns` attendues
     (parquet d'un schema anterieur -- ex. `dpe_clean` d'avant #23, sans

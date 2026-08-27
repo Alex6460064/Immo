@@ -214,8 +214,7 @@ def main() -> None:
     print(f"  Lignes exclues        : {rows_excluded}")
     print(f"    dont prix nul/manquant     : {counts[EXCLUDED_ZERO_PRICE]}")
     print(
-        f"    dont surface nulle/manquante (apres exclusion prix) : "
-        f"{counts[EXCLUDED_ZERO_SURFACE]}"
+        f"    dont surface nulle/manquante (apres exclusion prix) : {counts[EXCLUDED_ZERO_SURFACE]}"
     )
     if rows_in:
         print(f"  Taux de conservation  : {rows_out / rows_in:.1%}")

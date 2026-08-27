@@ -391,9 +391,7 @@ def impact_dpe_breakdown(
     ]
     return {
         "retenues": len(usable),
-        "resolu_consensus": sum(
-            1 for r in usable if r.get("match_status") == "resolu_consensus"
-        ),
+        "resolu_consensus": sum(1 for r in usable if r.get("match_status") == "resolu_consensus"),
         "pre_reforme_exclus": sum(
             1
             for r in kept_pre

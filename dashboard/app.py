@@ -108,9 +108,7 @@ def _sidebar(annees: list[str]) -> Filters:
     vue = st.sidebar.radio("Vue", ["Marché", "Impact DPE"])
 
     choices = data.commune_choices()
-    nom_sel = st.sidebar.selectbox(
-        "Commune", [TOUTES_COMMUNES, *sorted(c["nom"] for c in choices)]
-    )
+    nom_sel = st.sidebar.selectbox("Commune", [TOUTES_COMMUNES, *sorted(c["nom"] for c in choices)])
     commune = next((c for c in choices if c["nom"] == nom_sel), None)
 
     annee_min, annee_max = st.sidebar.select_slider(
@@ -123,9 +121,7 @@ def _sidebar(annees: list[str]) -> Filters:
     if vue == "Impact DPE":
         type_sel = st.sidebar.selectbox("Type de bien", [TOUS_TYPES, *data.TYPES_BIEN])
         type_local = None if type_sel == TOUS_TYPES else type_sel
-        groupe_sel = st.sidebar.selectbox(
-            "Regroupement DPE", [TOUS_GROUPES, *data.DPE_GROUPS]
-        )
+        groupe_sel = st.sidebar.selectbox("Regroupement DPE", [TOUS_GROUPES, *data.DPE_GROUPS])
         groupe = None if groupe_sel == TOUS_GROUPES else groupe_sel
     else:
         type_local = st.sidebar.selectbox("Type de bien", list(data.TYPES_BIEN))
@@ -149,9 +145,7 @@ def _vue_marche(f: Filters) -> None:
     )
 
     rows = _agg_marche()
-    communes = (
-        [f.commune_dvf] if f.commune_dvf else sorted({r["commune"] for r in rows})
-    )
+    communes = [f.commune_dvf] if f.commune_dvf else sorted({r["commune"] for r in rows})
 
     fig = go.Figure()
     total_n = 0

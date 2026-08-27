@@ -163,8 +163,7 @@ def main() -> None:
     print(f"    - trouve                                : {geocode_stats['found']}")
     print(f"    - non trouve (API BAN, aucun resultat)  : {geocode_stats['not_found']}")
     print(
-        f"    - erreur reseau persistante (a re-tenter au prochain run) : "
-        f"{geocode_stats['error']}"
+        f"    - erreur reseau persistante (a re-tenter au prochain run) : {geocode_stats['error']}"
     )
     print(
         f"    - taux de succes / tentatives ({attempted} adresses interrogees) : "

@@ -31,8 +31,18 @@ def _mut(code_insee, adresse="", surface=None, type_local=None, date="2023-01-01
     }
 
 
-def _dpe(numero, code_insee_ban, adresse, surface, *, etiquette=None, ges=None,
-         type_batiment=None, periode=None, date="2022-01-01"):
+def _dpe(
+    numero,
+    code_insee_ban,
+    adresse,
+    surface,
+    *,
+    etiquette=None,
+    ges=None,
+    type_batiment=None,
+    periode=None,
+    date="2022-01-01",
+):
     return {
         "numero_dpe": numero,
         "date_etablissement_dpe": date,
@@ -87,8 +97,18 @@ class TestMatchAll:
     def test_every_row_has_the_full_output_schema(self):
         dvf = [_mut("64102", "10 RUE DU MOULIN", surface=50.0)]
         dpe_by_commune, _ = group_dpe_by_commune(
-            [_dpe("D1", "64102", "10 RUE DU MOULIN", 50.0, etiquette="C", ges="D",
-                  type_batiment="appartement", periode="1975-1977")]
+            [
+                _dpe(
+                    "D1",
+                    "64102",
+                    "10 RUE DU MOULIN",
+                    50.0,
+                    etiquette="C",
+                    ges="D",
+                    type_batiment="appartement",
+                    periode="1975-1977",
+                )
+            ]
         )
         (row,), _, _ = match_all(dvf, dpe_by_commune, _SEUIL)
         assert set(row) == set(OUTPUT_COLUMNS)
