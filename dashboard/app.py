@@ -189,14 +189,15 @@ def _vue_marche(f: Filters) -> None:
     else:
         st.info("Aucune mutation pour cette sélection.")
 
-    st.subheader("Carte — prix moyen/m² par IRIS")
+    st.subheader("Carte — prix médian/m² par IRIS")
     st.caption(
-        "Agrégat cumulé toutes années (ADR 0004). Les communes à IRIS unique "
-        "(zone = commune entière) apparaissent comme une seule zone. Le filtre "
-        "*Période* n'agit pas sur la carte."
+        "Médiane cumulée toutes années, pour le type de bien sélectionné "
+        "(ADR 0004). Les communes à IRIS unique (zone = commune entière) "
+        "apparaissent comme une seule zone. Le filtre *Période* n'agit pas sur "
+        "la carte."
     )
     iris_vals = data.iris_map_values(
-        _agg_iris(), code_commune=f.code_commune, type_local=f.type_local
+        _agg_iris(), type_local=f.type_local, code_commune=f.code_commune
     )
     if not iris_vals:
         st.info("Aucune zone IRIS pour cette sélection.")
@@ -204,12 +205,15 @@ def _vue_marche(f: Filters) -> None:
 
     codes = {r["code_iris"] for r in iris_vals}
     center = data.geojson_center(_geojson(), codes) or _MAP_CENTER
+    zmin, zmax = data.color_range([r["mediane"] for r in iris_vals])
     map_fig = go.Figure(
         go.Choroplethmap(
             geojson=_geojson(),
             featureidkey="properties.code_iris",
             locations=[r["code_iris"] for r in iris_vals],
-            z=[r["moyenne"] for r in iris_vals],
+            z=[r["mediane"] for r in iris_vals],
+            zmin=zmin,
+            zmax=zmax,
             text=[r["nom_iris"] for r in iris_vals],
             customdata=[r["n"] for r in iris_vals],
             colorscale="Viridis",
@@ -226,7 +230,15 @@ def _vue_marche(f: Filters) -> None:
         height=520,
         margin={"t": 10, "r": 10, "l": 10, "b": 10},
     )
-    st.plotly_chart(map_fig, width="stretch")
+    # scrollZoom désactivé : sinon un défilement de page au-dessus de la carte
+    # la zoome par accident.
+    st.plotly_chart(map_fig, width="stretch", config={"scrollZoom": False})
+    if any(r["mediane"] > zmax for r in iris_vals):
+        st.caption(
+            "Échelle plafonnée au 95ᵉ centile : quelques IRIS à médiane aberrante "
+            "(mutations multi-lots, hors périmètre de nettoyage — issue #1) "
+            "saturent la couleur haute. Valeur exacte au survol."
+        )
 
 
 def _matching_rate_block() -> None:
@@ -237,12 +249,8 @@ def _matching_rate_block() -> None:
         "états sont affichés séparément, jamais fusionnés (CONTEXT.md)."
     )
     for col, s in zip(st.columns(4), rate["statuses"], strict=True):
-        col.metric(
-            s["label"].capitalize(),
-            f"{s['pct']:.1f} %",
-            f"{_n(s['n'])} mutations",
-            delta_color="off",
-        )
+        col.metric(s["label"].capitalize(), f"{s['pct']:.1f} %")
+        col.caption(f"{_n(s['n'])} mutations")
     cert = rate["etiquette_certaine"]
     st.markdown(
         "**Étiquette DPE certaine** (trouvé + résolu par consensus) : "
@@ -329,9 +337,9 @@ def _vue_impact_dpe(f: Filters) -> None:
     )
     st.plotly_chart(fig, width="stretch")
     st.caption(
-        "A–C (vert), D, E, F–G (rouge) — regroupés faute d'un `n` suffisant par "
-        "étiquette exacte sur l'échantillon apparié. `n` faible = à ne pas "
-        "surinterpréter."
+        "Regroupé en A–C / D / E / F–G faute d'un `n` suffisant par étiquette "
+        "exacte sur l'échantillon apparié ; `n` par barre au survol. Écarts à "
+        "lire comme un ordre de grandeur (cf. avertissement)."
     )
 
 

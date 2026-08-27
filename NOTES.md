@@ -97,19 +97,24 @@ sur la vue.
 
 ## 2026-08-27 — Dashboard carte IRIS (#14) : cumul toutes années
 
-La carte choroplèthe lit `agg_iris.parquet` tel quel — prix **moyen**/m² par IRIS,
-**cumulé sur toutes les années** (ADR 0004 : la carte est un agrégat de quartier
-sur ~10 ans, pas une mesure temporelle). Le filtre *Période* de la barre latérale
-n'agit donc **pas** sur la carte — dit explicitement en légende pour ne pas
-laisser croire à un rafraîchissement. Quand les deux types de bien sont retenus
-(vue Impact DPE ; la vue Marché impose un type — cf. ci-dessous), les moyennes
-par IRIS sont combinées par **moyenne pondérée de `n`** (valide pour une moyenne,
-pas pour une médiane — d'où `moyenne` et non `mediane` sur la carte). Communes à
-IRIS unique (code `…0000`, 7 sur 16) : rendues comme une seule zone, sans
-traitement spécial (critère d'acceptation #14). La carte se recadre sur la
+La carte choroplèthe lit `agg_iris.parquet` — prix/m² par IRIS, **cumulé sur
+toutes les années** (ADR 0004 : agrégat de quartier sur ~10 ans, pas une mesure
+temporelle). Le filtre *Période* n'agit donc **pas** sur la carte — dit en
+légende pour ne pas laisser croire à un rafraîchissement.
+
+**Couleur = médiane, pas moyenne** (précise la formulation « prix moyen/m² »
+d'ADR 0004). Vérifié à l'écran : avec la moyenne, un IRIS à quelques mutations
+multi-lots aberrantes montait à ~70 000 €/m² et écrasait toute l'échelle de
+couleur (reste uniformément violet). La médiane est déjà la stat de référence du
+projet (entrée « Valeurs prix/m² extrêmes non filtrées » ci-dessous). Comme la
+vue Marché impose un type de bien, chaque IRIS a une seule ligne `agg_iris` —
+pas de recombinaison inter-types à faire.
+
+Communes à IRIS unique (code `…0000`, 7 sur 16) : rendues comme une seule zone,
+sans traitement spécial (critère d'acceptation #14). La carte se recadre sur la
 boîte englobante des IRIS de la commune sélectionnée
-(`dashboard/data.py:geojson_center`), sinon elle reste centrée sur un point du
-périmètre trop excentré pour les communes du sud (Hendaye, Urrugne).
+(`dashboard/data.py:geojson_center`), sinon les communes du sud (Hendaye,
+Urrugne) tombaient hors cadre.
 
 Trace : `go.Choroplethmap` (MapLibre, sans jeton). `px.choropleth_mapbox`
 mentionné dans l'issue #14 est déprécié depuis Plotly 6 — même rendu.

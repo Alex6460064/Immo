@@ -45,7 +45,7 @@ uv run streamlit run dashboard/app.py
 Deux vues :
 
 - **Marché** — tendance du prix/m² médian par commune et par année (2016+), carte choroplèthe
-  du prix moyen/m² par zone IRIS. Filtres : commune, période, type de bien (maison **ou**
+  du prix/m² médian par zone IRIS. Filtres : commune, période, type de bien (maison **ou**
   appartement — une médiane mélangeant les deux n'aurait pas de sens).
 - **Impact DPE** — prix/m² par regroupement d'étiquette DPE (A-C / D / E / F-G) sur le
   sous-ensemble apparié **post-réforme** (mutations ≥ juillet 2021), avec le **taux

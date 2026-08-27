@@ -15,6 +15,7 @@ import pytest
 from dashboard.data import (
     DPE_GROUPS,
     MATCH_STATUSES,
+    color_range,
     commune_choices,
     commune_from_code_iris,
     dpe_group,
@@ -191,28 +192,44 @@ class TestFilterIris:
 class TestIrisMapValues:
     _ROWS = [
         {"code_iris": "640240115", "nom_iris": "Pontots", "type_local": "Maison",
-         "n": 10, "moyenne": 4000.0},
+         "n": 10, "moyenne": 9000.0, "mediane": 4000.0},
         {"code_iris": "640240115", "nom_iris": "Pontots", "type_local": "Appartement",
-         "n": 30, "moyenne": 8000.0},
+         "n": 30, "moyenne": 8000.0, "mediane": 6500.0},
         {"code_iris": "402090000", "nom_iris": "Ondres", "type_local": "Maison",
-         "n": 5, "moyenne": 3000.0},
+         "n": 5, "moyenne": 3000.0, "mediane": 2900.0},
     ]
 
-    def test_weighted_mean_across_types(self):
-        out = {r["code_iris"]: r for r in iris_map_values(self._ROWS)}
-        # (4000*10 + 8000*30) / 40 = 7000
-        assert out["640240115"]["moyenne"] == pytest.approx(7000.0)
-        assert out["640240115"]["n"] == 40
+    def test_returns_median_of_selected_type(self):
+        out = {r["code_iris"]: r for r in iris_map_values(self._ROWS, type_local="Maison")}
+        assert out["640240115"]["mediane"] == 4000.0
+        assert out["640240115"]["n"] == 10
+        assert set(out) == {"640240115", "402090000"}
 
-    def test_type_filter_passes_single_row_through(self):
-        out = iris_map_values(self._ROWS, type_local="Maison")
-        by = {r["code_iris"]: r["moyenne"] for r in out}
-        assert by == {"640240115": 4000.0, "402090000": 3000.0}
+    def test_other_type_selects_other_rows(self):
+        out = iris_map_values(self._ROWS, type_local="Appartement")
+        assert [r["mediane"] for r in out] == [6500.0]
 
     def test_single_iris_commune_yields_one_row(self):
-        out = iris_map_values(self._ROWS, code_commune="40209")
+        out = iris_map_values(self._ROWS, type_local="Maison", code_commune="40209")
         assert len(out) == 1
         assert out[0]["nom_iris"] == "Ondres"
+
+
+class TestColorRange:
+    def test_caps_zmax_at_upper_percentile(self):
+        vals = [*range(1, 20), 9999]  # 20 valeurs, la derniere aberrante
+        zmin, zmax = color_range(vals)
+        assert zmin == 1
+        assert zmax < 9999  # plafonné, l'outlier ne fixe pas le haut
+
+    def test_small_sample_uses_min_max(self):
+        assert color_range([100.0, 200.0, 5000.0]) == (100.0, 5000.0)
+
+    def test_ignores_none(self):
+        assert color_range([None, 5.0, None, 1.0], min_count=1) == (1.0, 5.0)
+
+    def test_empty_is_none(self):
+        assert color_range([]) is None
 
 
 class TestFilterMatched:

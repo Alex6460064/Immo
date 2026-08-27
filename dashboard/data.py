@@ -223,42 +223,51 @@ def filter_iris(
 def iris_map_values(
     rows: Sequence[dict],
     *,
+    type_local: str,
     code_commune: str | None = None,
-    type_local: str | None = None,
 ) -> list[dict]:
-    """Une valeur par IRIS pour la carte choroplethe (ADR 0004 : prix *moyen*/m2
-    par zone). Quand plusieurs types de bien sont retenus, les moyennes sont
-    combinees par moyenne ponderee de l'effectif `n` -- valide pour une moyenne
-    (contrairement a la mediane). Trie par `code_iris`.
+    """Une ligne `agg_iris` par IRIS pour la carte choroplethe : prix **median**/m2
+    du type de bien selectionne.
+
+    Mediane et non moyenne : DVF ne deduplique pas les mutations multi-lots, une
+    poignee de lignes prix/m2 aberrantes suffit a faire exploser la moyenne d'un
+    petit IRIS et a ecraser toute l'echelle de couleur. La mediane est la stat de
+    reference du projet (NOTES.md) -- ceci precise la formulation « prix moyen/m2 »
+    d'ADR 0004. La vue Marche impose toujours un `type_local`, donc un IRIS = une
+    ligne (pas de recombinaison entre types). Trie par `code_iris`.
     """
     kept = filter_iris(rows, code_commune=code_commune, type_local=type_local)
-    acc: dict[str, dict] = {}
-    for r in kept:
-        code = r.get("code_iris")
-        if code is None:
-            continue
-        n = int(r.get("n") or 0)
-        moyenne = r.get("moyenne")
-        bucket = acc.setdefault(
-            code, {"code_iris": code, "nom_iris": r.get("nom_iris"), "wsum": 0.0, "n": 0}
-        )
-        if moyenne is None or n <= 0:
-            continue
-        bucket["wsum"] += moyenne * n
-        bucket["n"] += n
     return sorted(
         (
             {
-                "code_iris": b["code_iris"],
-                "nom_iris": b["nom_iris"],
-                "moyenne": b["wsum"] / b["n"],
-                "n": b["n"],
+                "code_iris": r["code_iris"],
+                "nom_iris": r.get("nom_iris"),
+                "mediane": r["mediane"],
+                "n": int(r.get("n") or 0),
             }
-            for b in acc.values()
-            if b["n"] > 0
+            for r in kept
+            if r.get("code_iris") is not None and r.get("mediane") is not None
         ),
         key=lambda r: r["code_iris"],
     )
+
+
+def color_range(
+    values: Sequence[float], *, upper_pct: float = 0.95, min_count: int = 6
+) -> tuple[float, float] | None:
+    """Bornes `(zmin, zmax)` de l'echelle de couleur de la carte, `zmax` plafonne
+    au centile `upper_pct` : sur le jeu courant un IRIS (Tarnos « Sud », n=86)
+    a une mediane appartement > 80 000 EUR/m2 -- lots mixtes, hors perimetre de
+    nettoyage (#1) -- qui ecrase toute l'echelle. La zone reste affichee et sa
+    valeur exacte reste au survol. En dessous de `min_count` valeurs, pas de
+    plafond (min..max). `None` si aucune valeur."""
+    vs = sorted(v for v in values if v is not None)
+    if not vs:
+        return None
+    if len(vs) < min_count:
+        return (vs[0], vs[-1])
+    idx = min(len(vs) - 1, round(upper_pct * (len(vs) - 1)))
+    return (vs[0], vs[idx])
 
 
 def filter_matched(

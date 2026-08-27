@@ -20,6 +20,16 @@ masqué.
 
 ---
 
+## Statistique de couleur : médiane (implémentation T13, 2026-08-27)
+
+Cet ADR dit « couleur = prix moyen/m² par zone ». À l'implémentation du dashboard
+(#14), la **médiane**/m² par IRIS a été retenue à la place de la moyenne :
+vérifié à l'écran, un IRIS à quelques mutations multi-lots aberrantes (DVF ne
+déduplique pas maison + garage) porte sa moyenne à ~70 000 €/m² et écrase toute
+l'échelle de couleur. La médiane est déjà la statistique de référence du projet
+pour cette raison (voir `NOTES.md`, « Valeurs prix/m² extrêmes non filtrées »).
+Le principe de l'ADR — agrégat de quartier, zonage IRIS officiel — est inchangé.
+
 ## Source concrète des contours (implémentation T11, 2026-08-27)
 
 Le GeoJSON national « Contours IRIS » n'est plus proposé en téléchargement direct sur
