@@ -64,6 +64,65 @@ aberrations est **Out of Scope** (issue #1). Conséquence assumée : la **média
 statistique de référence (robuste), la moyenne est fournie mais sensible. `05_aggregate.py`
 affiche le nombre de lignes hors [200, 30 000] €/m² (jeu courant : 1 753) pour rester visible.
 
+## 2026-08-27 — Dashboard vue « Impact DPE » (#15) : ré-agrégée à la volée
+
+Le graphique prix/m² de la vue « Impact DPE » est **recalculé à la lecture**
+depuis `dvf_dpe_matched.parquet`, pas lu depuis `agg_dpe.parquet`.
+
+**Pourquoi** : `agg_dpe.parquet` (#T12) n'est indexé que par (étiquette exacte,
+type de bien) — il ne permet ni les filtres **commune** / **période** demandés
+par #15, ni le **regroupement A-C / D / E / F-G** que le ticket décrit
+explicitement (« prix/m² par étiquette DPE (A-C/D/E/F-G) »). Une médiane par
+regroupement ne se recompose pas à partir des médianes par lettre.
+`dashboard/data.py:impact_dpe_aggregate()` applique les filtres sur les lignes
+brutes puis réutilise **les mêmes fonctions pures** que
+`pipeline/05_aggregate.py` (`impact_dpe_rows` → `price_per_m2` → `aggregate_by`),
+en groupant par `dpe_group(etiquette)` × type de bien. Sans filtre
+commune/période, **les mêmes mutations** sont agrégées que dans `agg_dpe.parquet`
+(mêmes effectifs totaux) — seule la maille de groupe diffère. `agg_dpe.parquet`
+reste la sortie canonique du pipeline (témoin de non-régression CI).
+`dvf_dpe_matched.parquet` fait 56 929 lignes — chargé en entier sans souci.
+
+Regroupement plutôt que 7 barres A→G : sur le sous-ensemble apparié post-réforme,
+plusieurs lettres ont un `n` trop faible pour une médiane lisible commune par
+commune. Le `n` de chaque barre reste affiché (au survol) — CLAUDE.md : pas de
+petit groupe masqué.
+
+Taux d'appariement affiché sur la vue : les **4 états** (`trouvé` 37,8 % /
+`resolu_consensus` 12,1 % / `non trouvé` 18,4 % / `ambigu` 31,7 %) sur
+l'**ensemble du périmètre** (pas re-filtré par commune/période — donnée de
+cadrage du projet, CONTEXT.md). Mention « dont N résolus par consensus » +
+avertissement décalage temporel DVF (2016+) / DPE (juillet 2021+) portés en clair
+sur la vue.
+
+## 2026-08-27 — Dashboard carte IRIS (#14) : cumul toutes années
+
+La carte choroplèthe lit `agg_iris.parquet` tel quel — prix **moyen**/m² par IRIS,
+**cumulé sur toutes les années** (ADR 0004 : la carte est un agrégat de quartier
+sur ~10 ans, pas une mesure temporelle). Le filtre *Période* de la barre latérale
+n'agit donc **pas** sur la carte — dit explicitement en légende pour ne pas
+laisser croire à un rafraîchissement. Quand les deux types de bien sont retenus
+(vue Impact DPE ; la vue Marché impose un type — cf. ci-dessous), les moyennes
+par IRIS sont combinées par **moyenne pondérée de `n`** (valide pour une moyenne,
+pas pour une médiane — d'où `moyenne` et non `mediane` sur la carte). Communes à
+IRIS unique (code `…0000`, 7 sur 16) : rendues comme une seule zone, sans
+traitement spécial (critère d'acceptation #14). La carte se recadre sur la
+boîte englobante des IRIS de la commune sélectionnée
+(`dashboard/data.py:geojson_center`), sinon elle reste centrée sur un point du
+périmètre trop excentré pour les communes du sud (Hendaye, Urrugne).
+
+Trace : `go.Choroplethmap` (MapLibre, sans jeton). `px.choropleth_mapbox`
+mentionné dans l'issue #14 est déprécié depuis Plotly 6 — même rendu.
+
+## 2026-08-27 — Dashboard vue « Marché » : un type de bien obligatoire
+
+La courbe de tendance trace une **médiane** de prix/m². Mélanger maisons et
+appartements dans une même médiane annuelle n'a pas de sens (deux populations de
+prix distinctes) et produisait une courbe en zigzag. Le sélecteur *Type de bien*
+de la vue Marché n'a donc **pas** d'option « Tous » — maison **ou** appartement,
+défaut appartement. La vue Impact DPE garde « Tous » : les barres y restent
+séparées par type, chaque barre est une médiane homogène.
+
 ## 2026-08-27 — Récupération des ambigus (#23) : spike de mesure + gate
 
 Script jetable (scratchpad, non versionné) sur le jeu courant (56 929 mutations / 61 277 DPE).
