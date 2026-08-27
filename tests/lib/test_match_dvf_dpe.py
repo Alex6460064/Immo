@@ -17,6 +17,7 @@ from pipeline.lib.match_dvf_dpe import (
     build_dpe_index,
     classify_match,
     classify_match_indexed,
+    dedup_dpe,
     match_mutation,
 )
 
@@ -25,13 +26,30 @@ from pipeline.lib.match_dvf_dpe import (
 _REF_LAT, _REF_LON = 43.4832, -1.5586
 
 
-def _dpe(numero, adresse="", lat=None, lon=None, surface=None):
+def _dpe(
+    numero,
+    adresse="",
+    lat=None,
+    lon=None,
+    surface=None,
+    *,
+    etiquette=None,
+    ges=None,
+    type_batiment=None,
+    periode=None,
+    date_etablissement=None,
+):
     return {
         "numero_dpe": numero,
         "adresse_normalisee": adresse,
         "lat": lat,
         "lon": lon,
         "surface_habitable_logement": surface,
+        "etiquette_dpe": etiquette,
+        "etiquette_ges": ges,
+        "type_batiment": type_batiment,
+        "periode_construction": periode,
+        "date_etablissement_dpe": date_etablissement,
     }
 
 
@@ -52,6 +70,74 @@ class TestNoCandidates:
 
     def test_match_mutation_returns_bare_status_string(self):
         assert match_mutation(_mutation("10 RUE DU MOULIN"), [], 15) == "non_trouve"
+
+
+class TestDedupDpe:
+    """`dedup_dpe` (brique B, spec §4) collapse les DPE redondants d'une commune :
+    meme `adresse_normalisee` exacte + meme signature analytique/bati ->
+    un seul garde (le plus recent). Adresse vide : jamais groupee."""
+
+    _SIG = dict(
+        surface=44.2, etiquette="D", ges="D", type_batiment="appartement", periode="2013-2021"
+    )
+
+    def test_three_identical_dpe_collapse_to_the_most_recent(self):
+        cands = [
+            _dpe("D1", "5 RUE DES PECHEURS", date_etablissement="2022-03-01", **self._SIG),
+            _dpe("D2", "5 RUE DES PECHEURS", date_etablissement="2024-09-15", **self._SIG),
+            _dpe("D3", "5 RUE DES PECHEURS", date_etablissement="2023-01-20", **self._SIG),
+        ]
+        kept = dedup_dpe(cands)
+        assert [d["numero_dpe"] for d in kept] == ["D2"]
+
+    def test_different_periode_construction_stays_distinct(self):
+        cands = [
+            _dpe("D1", "5 RUE DES PECHEURS", date_etablissement="2022-03-01", **self._SIG),
+            _dpe(
+                "D2",
+                "5 RUE DES PECHEURS",
+                date_etablissement="2022-03-01",
+                surface=44.2,
+                etiquette="D",
+                ges="D",
+                type_batiment="appartement",
+                periode="1948-1974",
+            ),
+        ]
+        assert {d["numero_dpe"] for d in dedup_dpe(cands)} == {"D1", "D2"}
+
+    def test_surface_within_rounding_tolerance_is_same_bucket(self):
+        # 44.24 and 44.19 both round to 44.2 at 1 decimal.
+        sig = dict(etiquette="D", ges="D", type_batiment="appartement", periode="2013-2021")
+        cands = [
+            _dpe("D1", "5 RUE DES PECHEURS", date_etablissement="2022-03-01", surface=44.24, **sig),
+            _dpe("D2", "5 RUE DES PECHEURS", date_etablissement="2024-01-01", surface=44.19, **sig),
+        ]
+        assert [d["numero_dpe"] for d in dedup_dpe(cands)] == ["D2"]
+
+    def test_empty_address_dpe_are_never_grouped(self):
+        cands = [
+            _dpe("D1", "", date_etablissement="2022-03-01", **self._SIG),
+            _dpe("D2", "", date_etablissement="2024-01-01", **self._SIG),
+        ]
+        assert {d["numero_dpe"] for d in dedup_dpe(cands)} == {"D1", "D2"}
+
+    def test_date_tie_broken_by_numero_dpe_max(self):
+        cands = [
+            _dpe("AAA", "5 RUE DES PECHEURS", date_etablissement="2022-03-01", **self._SIG),
+            _dpe("ZZZ", "5 RUE DES PECHEURS", date_etablissement="2022-03-01", **self._SIG),
+        ]
+        assert [d["numero_dpe"] for d in dedup_dpe(cands)] == ["ZZZ"]
+
+    def test_different_addresses_not_merged(self):
+        cands = [
+            _dpe("D1", "5 RUE DES PECHEURS", date_etablissement="2022-03-01", **self._SIG),
+            _dpe("D2", "7 RUE DES PECHEURS", date_etablissement="2022-03-01", **self._SIG),
+        ]
+        assert {d["numero_dpe"] for d in dedup_dpe(cands)} == {"D1", "D2"}
+
+    def test_empty_input_returns_empty(self):
+        assert dedup_dpe([]) == []
 
 
 class TestPass1ExactText:

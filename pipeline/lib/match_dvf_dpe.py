@@ -61,6 +61,52 @@ def _norm(value) -> str:
     return (value or "").strip()
 
 
+def _dedup_key(dpe: dict) -> tuple:
+    """Signature analytique + bati d'un DPE (brique B, spec §4 / ADR 0003) : deux DPE
+    de meme `adresse_normalisee` qui partagent cette cle sont le meme logement
+    diagnostique plusieurs fois. La cle fige `etiquette_dpe` + `etiquette_ges`, donc
+    fusionner ne change jamais une reponse analytique (`agg_dpe`)."""
+    surface = dpe.get("surface_habitable_logement")
+    return (
+        round(surface, 1) if surface is not None else None,
+        dpe.get("etiquette_dpe"),
+        dpe.get("etiquette_ges"),
+        dpe.get("periode_construction"),
+        dpe.get("type_batiment"),
+    )
+
+
+def _recency(dpe: dict) -> tuple[str, str]:
+    """Ordre de recence pour le departage d'un groupe de dedup : date d'etablissement
+    la plus recente, puis `numero_dpe` max (departage deterministe). Date absente ->
+    trie en dernier (cas theorique, tous les DPE retenus etant post-reforme donc dates)."""
+    return (dpe.get("date_etablissement_dpe") or "", dpe.get("numero_dpe") or "")
+
+
+def dedup_dpe(dpe_candidats: list[dict]) -> list[dict]:
+    """Collapse les DPE redondants d'une commune (brique B, spec §4).
+
+    Entree : DPE deja restreints a une commune. Au sein d'une `adresse_normalisee`
+    exacte identique (non vide) et d'une meme `_dedup_key`, on garde un seul
+    enregistrement -- le plus recent (`_recency`). Les DPE a adresse vide ne sont
+    jamais groupes (pas de cle d'adresse fiable) et passent tels quels.
+
+    Deterministe, pure. Appelee par `classify_match` et `build_dpe_index` pour que
+    les deux chemins voient exactement la meme liste dedupliquee.
+    """
+    groups: dict[tuple, list[dict]] = defaultdict(list)
+    kept: list[dict] = []
+    for dpe in dpe_candidats:
+        adresse = _norm(dpe.get("adresse_normalisee"))
+        if not adresse:
+            kept.append(dpe)
+            continue
+        groups[(adresse, _dedup_key(dpe))].append(dpe)
+    for group in groups.values():
+        kept.append(group[0] if len(group) == 1 else max(group, key=_recency))
+    return kept
+
+
 def _surface_tiebreak(mutation: dict, candidats: list[dict], methode: str) -> MatchResult:
     """Passe 3 : garde le DPE candidat dont la surface est a +/- SURFACE_TOLERANCE_M2
     de la surface de la mutation. Un seul -> trouve ; sinon -> ambigu."""
