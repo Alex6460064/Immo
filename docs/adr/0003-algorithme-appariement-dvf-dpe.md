@@ -51,3 +51,30 @@ non identique — suffixe *BIS/TER*, numéro manquant — que BAN interpole vers
 parcelle mitoyenne. Toute la plage 10–30 m donne le même comportement réel sur l'échantillon
 (95,87 % des paires couvertes). L'estimation « ~15-20 m » du texte ci-dessus est confirmée ;
 15 m est retenu comme borne basse défendable.
+
+---
+
+## Précisions d'implémentation (T10, `pipeline/04_join.py`, 2026-08-27)
+
+**Passe 1 — clé texte + scoping commune.** L'algorithme ci-dessus décrit la passe 1 comme
+« numéro + voie + code postal identiques ». `adresse_normalisee` (produite par
+`pipeline/lib/normalize_address.py`) est en pratique une clé *rue seule* (sans CP ni commune —
+choix documenté dans `clean_dvf.py` / `clean_dpe.py` pour ne pas polluer la clé de comparaison
+textuelle). Le rôle du code postal est tenu à la place par un **scoping commune** : pour
+chaque mutation, seuls les DPE de la même commune (`code_insee` == `code_insee_ban`) sont
+candidats. Sur le périmètre du projet c'est équivalent-ou-plus-strict que le CP (communes
+quasi toutes mono-CP) et ça évite un faux appariement inter-communes sur une rue homonyme.
+
+**Passes 1 & 2 — plusieurs candidats → départage surface.** Quand la passe 1 trouve *plusieurs*
+DPE à adresse identique (immeuble collectif), on enchaîne directement sur le départage par
+surface ± 2 m² sur ce sous-ensemble (méthode `texte_exact_surface`), au lieu de déclarer
+« ambigu » d'emblée — même logique que pour plusieurs candidats dans le seuil de distance
+(`distance_surface`).
+
+**Résultat mesuré (jeu courant, 56 929 mutations)** : trouvé 34,6 % / non trouvé 18,4 % /
+**ambigu 46,9 %**. L'ambigu élevé est réel, pas un bug : en habitat collectif dense (BAB),
+plusieurs logements d'un immeuble partagent adresse + surface à ± 2 m² près, et l'algorithme
+refuse de trancher au hasard (principe de cet ADR). Parmi les 19 721 « trouvé », **10 448
+portent sur une mutation antérieure à juillet 2021** — appariées à un DPE forcément
+post-réforme donc établi après la vente ; conservées dans `dvf_dpe_matched.parquet` mais
+exclues de l'agrégat « Impact DPE » (voir `NOTES.md`).
