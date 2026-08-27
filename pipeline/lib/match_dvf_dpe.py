@@ -272,17 +272,23 @@ def classify_match(
 
     Implementation de reference (criteres d'acceptation issue #11).
 
-    `mutation` : dict avec `adresse_normalisee`, `lat`, `lon`, `surface`.
+    `mutation` : dict avec `adresse_normalisee`, `lat`, `lon`, `surface`,
+        `type_local`.
     `dpe_candidats` : DPE deja restreints a la commune de la mutation, chacun un
         dict avec `numero_dpe`, `adresse_normalisee`, `lat`, `lon`,
-        `surface_habitable_logement`.
+        `surface_habitable_logement`, `etiquette_dpe`, `etiquette_ges`,
+        `type_batiment`, `periode_construction`, `date_etablissement_dpe`.
     `seuil_distance_m` : seuil de la passe 2 (calibre en T9, voir
         `pipeline.lib.match_distance.DISTANCE_THRESHOLD_M`) -- passe en parametre,
         jamais lu en dur ici.
+
+    Les candidats sont dedupliques en entree (`dedup_dpe`, brique B) : les deux
+    chemins de matching (cette reference et l'indexe) voient la meme liste.
     """
     if not dpe_candidats:
         return MatchResult("non_trouve", None, None)
 
+    dpe_candidats = dedup_dpe(dpe_candidats)
     adresse_mutation = _norm(mutation.get("adresse_normalisee"))
     exact = (
         [d for d in dpe_candidats if _norm(d.get("adresse_normalisee")) == adresse_mutation]
@@ -312,7 +318,11 @@ class DpeIndex(NamedTuple):
 
 
 def build_dpe_index(dpe_candidats: list[dict], seuil_distance_m: float) -> DpeIndex:
-    """Construit le `DpeIndex` des DPE d'une commune pour le seuil de distance donne."""
+    """Construit le `DpeIndex` des DPE d'une commune pour le seuil de distance donne.
+
+    Les candidats sont dedupliques (`dedup_dpe`, brique B) avant indexation -- meme
+    liste que celle vue par la reference `classify_match`."""
+    dpe_candidats = dedup_dpe(dpe_candidats)
     by_addr: dict[str, list[dict]] = defaultdict(list)
     grid: dict[tuple[int, int], list[dict]] = defaultdict(list)
     cell_deg = max(seuil_distance_m / _DEG_LAT_M, 1e-9)

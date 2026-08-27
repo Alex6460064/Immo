@@ -185,6 +185,28 @@ class TestMatchResultCarriesContext:
         assert ambigu.etiquette_dpe is None
 
 
+class TestClassifyMatchAppliesDedup:
+    """`classify_match` deduplique ses candidats en entree (brique B) : deux
+    diagnostics redondants du meme logement ne creent plus une fausse ambiguite."""
+
+    def test_redundant_dpe_collapse_before_matching(self):
+        sig = dict(
+            adresse="5 RUE DES PECHEURS",
+            surface=44.2,
+            etiquette="D",
+            ges="D",
+            type_batiment="appartement",
+            periode="2013-2021",
+        )
+        candidates = [
+            _dpe("D1", date_etablissement="2022-01-01", **sig),
+            _dpe("D2", date_etablissement="2024-06-01", **sig),
+        ]
+        result = classify_match(_mutation("5 RUE DES PECHEURS", surface=44.0), candidates, 15)
+        assert result.status == "trouve"
+        assert result.numero_dpe == "D2"  # the most recent survivor
+
+
 class TestPass1ExactText:
     def test_single_exact_address_is_trouve(self):
         candidates = [
@@ -277,9 +299,7 @@ class TestTypeFilterC:
 
     def test_not_applied_to_a_single_contradicting_candidate(self):
         candidates = [_dpe("D1", "5 RUE A", type_batiment="maison", etiquette="E")]
-        result = classify_match(
-            _mutation("5 RUE A", type_local="Appartement"), candidates, 15
-        )
+        result = classify_match(_mutation("5 RUE A", type_local="Appartement"), candidates, 15)
         assert result.status == "trouve"
         assert result.numero_dpe == "D1"
         assert result.filtre_type_applique is False
@@ -303,10 +323,12 @@ class TestPass4ConsensusEtiquette:
     -> `resolu_consensus` (identite inconnue, etiquette certaine). Sinon -> `ambigu`."""
 
     def _two_exact(self, **overrides):
-        base = dict(adresse="5 RUE A", surface=50.0)
+        # Distinct surfaces (50.0 vs 51.0) so `dedup_dpe` keeps them as two candidates
+        # -- both still within +/-2 m2 of a 50 m2 mutation, so the surface pass cannot
+        # separate them and the consensus pass takes over.
         return [
-            _dpe("D1", **{**base, **overrides.get("d1", {})}),
-            _dpe("D2", **{**base, **overrides.get("d2", {})}),
+            _dpe("D1", adresse="5 RUE A", surface=50.0, **overrides.get("d1", {})),
+            _dpe("D2", adresse="5 RUE A", surface=51.0, **overrides.get("d2", {})),
         ]
 
     def test_unanimous_label_within_surface_is_resolu_consensus(self):
@@ -450,7 +472,7 @@ class TestEveryMutationEndsInExactlyOneState:
                 _mutation("10 RUE A", surface=50.0),
                 [
                     _dpe("D1", "10 RUE A", surface=50.0, etiquette="D"),
-                    _dpe("D2", "10 RUE A", surface=50.0, etiquette="D"),
+                    _dpe("D2", "10 RUE A", surface=51.0, etiquette="D"),
                 ],
             ),
         ],
@@ -459,9 +481,11 @@ class TestEveryMutationEndsInExactlyOneState:
         assert match_mutation(mutation, candidates, 15) in self._VOCAB
 
     def test_consensus_case_reaches_resolu_consensus(self):
+        # Two distinct logements (surfaces 50 / 51, both within +/-2 of the mutation),
+        # same label D -> identity unknown, label certain.
         candidates = [
             _dpe("D1", "10 RUE A", surface=50.0, etiquette="D"),
-            _dpe("D2", "10 RUE A", surface=50.0, etiquette="D"),
+            _dpe("D2", "10 RUE A", surface=51.0, etiquette="D"),
         ]
         status = match_mutation(_mutation("10 RUE A", surface=50.0), candidates, 15)
         assert status == "resolu_consensus"
@@ -473,17 +497,42 @@ class TestIndexedMatchesReferenceImplementation:
     `classify_match` -- l'index n'est qu'une optimisation."""
 
     # DPE geocodes autour de _REF (~0.0001 deg = 11 m de pas) + variantes texte/surface.
+    # A / A_bis / A_ter : trois diagnostics redondants du meme logement (meme adresse,
+    # meme signature) -> `dedup_dpe` doit les collapser, dans les DEUX chemins.
+    _SIG_A = dict(
+        surface=50.0, etiquette="D", ges="D", type_batiment="appartement", periode="2013-2021"
+    )
+    _MOULIN = dict(adresse="10 RUE DU MOULIN", lat=_REF_LAT, lon=_REF_LON)
     _CANDIDATES = [
-        _dpe("A", "10 RUE DU MOULIN", lat=_REF_LAT, lon=_REF_LON, surface=50.0),
-        _dpe("B", "10 RUE DU MOULIN", lat=_REF_LAT, lon=_REF_LON, surface=95.0),
-        _dpe("C", "12 RUE DU MOULIN", lat=_REF_LAT + 0.00004, lon=_REF_LON, surface=64.0),
+        _dpe("A", date_etablissement="2022-01-01", **_MOULIN, **_SIG_A),
+        _dpe("A_bis", date_etablissement="2024-05-01", **_MOULIN, **_SIG_A),
+        _dpe("A_ter", date_etablissement="2023-03-01", **_MOULIN, **_SIG_A),
+        _dpe("B", **_MOULIN, surface=95.0, etiquette="F"),
+        _dpe(
+            "C",
+            "12 RUE DU MOULIN",
+            lat=_REF_LAT + 0.00004,
+            lon=_REF_LON,
+            surface=64.0,
+            etiquette="C",
+        ),
         _dpe("D", "", lat=_REF_LAT + 0.0005, lon=_REF_LON + 0.0005, surface=30.0),
         _dpe("E", "3 QUAI DES CORSAIRES", lat=None, lon=None, surface=70.0),
-        _dpe("F", "12 RUE DU MOULIN", lat=_REF_LAT - 0.00003, lon=_REF_LON, surface=200.0),
+        _dpe(
+            "F",
+            "12 RUE DU MOULIN",
+            lat=_REF_LAT - 0.00003,
+            lon=_REF_LON,
+            surface=200.0,
+            etiquette="C",
+        ),
     ]
 
     _MUTATIONS = [
         _mutation("10 RUE DU MOULIN", lat=_REF_LAT, lon=_REF_LON, surface=94.0),
+        _mutation(
+            "10 RUE DU MOULIN", lat=_REF_LAT, lon=_REF_LON, surface=50.0, type_local="Appartement"
+        ),
         _mutation("12 RUE DU MOULIN", lat=_REF_LAT, lon=_REF_LON, surface=64.5),
         _mutation("INCONNUE", lat=_REF_LAT, lon=_REF_LON, surface=64.5),
         _mutation("3 QUAI DES CORSAIRES", lat=None, lon=None, surface=70.0),
