@@ -297,6 +297,68 @@ class TestTypeFilterC:
         assert result.filtre_type_applique is False
 
 
+class TestPass4ConsensusEtiquette:
+    """Passe 4 (spec §4 A2 / D5) : quand la passe 3 surface n'isole pas 1 candidat,
+    si tous les candidats du sous-ensemble portent la meme `etiquette_dpe` non nulle
+    -> `resolu_consensus` (identite inconnue, etiquette certaine). Sinon -> `ambigu`."""
+
+    def _two_exact(self, **overrides):
+        base = dict(adresse="5 RUE A", surface=50.0)
+        return [
+            _dpe("D1", **{**base, **overrides.get("d1", {})}),
+            _dpe("D2", **{**base, **overrides.get("d2", {})}),
+        ]
+
+    def test_unanimous_label_within_surface_is_resolu_consensus(self):
+        candidates = self._two_exact(
+            d1=dict(etiquette="D", ges="D"), d2=dict(etiquette="D", ges="D")
+        )
+        result = classify_match(_mutation("5 RUE A", surface=50.0), candidates, 15)
+        assert result.status == "resolu_consensus"
+        assert result.numero_dpe is None
+        assert result.methode == "consensus_etiquette"
+        assert result.etiquette_dpe == "D"
+        assert result.etiquette_ges == "D"
+
+    def test_divergent_labels_is_ambigu(self):
+        candidates = self._two_exact(d1=dict(etiquette="D"), d2=dict(etiquette="E"))
+        result = classify_match(_mutation("5 RUE A", surface=50.0), candidates, 15)
+        assert result.status == "ambigu"
+        assert result.etiquette_dpe is None
+
+    def test_null_label_on_one_candidate_is_ambigu(self):
+        candidates = self._two_exact(d1=dict(etiquette="D"), d2=dict(etiquette=None))
+        result = classify_match(_mutation("5 RUE A", surface=50.0), candidates, 15)
+        assert result.status == "ambigu"
+
+    def test_consensus_falls_back_to_pool_when_surface_missing(self):
+        candidates = self._two_exact(d1=dict(etiquette="C"), d2=dict(etiquette="C"))
+        result = classify_match(_mutation("5 RUE A", surface=None), candidates, 15)
+        assert result.status == "resolu_consensus"
+        assert result.etiquette_dpe == "C"
+
+    def test_ges_not_carried_when_it_diverges(self):
+        candidates = self._two_exact(
+            d1=dict(etiquette="D", ges="D"), d2=dict(etiquette="D", ges="E")
+        )
+        result = classify_match(_mutation("5 RUE A", surface=50.0), candidates, 15)
+        assert result.status == "resolu_consensus"
+        assert result.etiquette_dpe == "D"
+        assert result.etiquette_ges is None
+
+    def test_consensus_subset_is_within_not_the_whole_pool(self):
+        # Three candidates; only the two D's are within +/-2 m2 of the mutation.
+        # The out-of-surface E must not break the consensus.
+        candidates = [
+            _dpe("D1", "5 RUE A", surface=50.0, etiquette="D"),
+            _dpe("D2", "5 RUE A", surface=51.0, etiquette="D"),
+            _dpe("E1", "5 RUE A", surface=120.0, etiquette="E"),
+        ]
+        result = classify_match(_mutation("5 RUE A", surface=50.0), candidates, 15)
+        assert result.status == "resolu_consensus"
+        assert result.etiquette_dpe == "D"
+
+
 class TestPass2Distance:
     def test_single_dpe_within_threshold_is_trouve(self):
         near = _dpe("D1", "AUTRE LIBELLE", lat=_REF_LAT + 0.00005, lon=_REF_LON, surface=50.0)
@@ -368,6 +430,10 @@ class TestSurfaceTolerance:
 
 
 class TestEveryMutationEndsInExactlyOneState:
+    # Vocabulaire a 4 etats depuis #23 (spec §5) : `resolu_consensus` s'insere
+    # entre `trouve` et `ambigu`. Changement de contrat assume vs issue #11.
+    _VOCAB = {"trouve", "resolu_consensus", "non_trouve", "ambigu"}
+
     @pytest.mark.parametrize(
         "mutation, candidates",
         [
@@ -380,10 +446,25 @@ class TestEveryMutationEndsInExactlyOneState:
                     _dpe("D2", "", lat=_REF_LAT, lon=_REF_LON, surface=50.0),
                 ],
             ),
+            (
+                _mutation("10 RUE A", surface=50.0),
+                [
+                    _dpe("D1", "10 RUE A", surface=50.0, etiquette="D"),
+                    _dpe("D2", "10 RUE A", surface=50.0, etiquette="D"),
+                ],
+            ),
         ],
     )
-    def test_status_always_in_the_three_state_vocabulary(self, mutation, candidates):
-        assert match_mutation(mutation, candidates, 15) in {"trouve", "non_trouve", "ambigu"}
+    def test_status_always_in_the_four_state_vocabulary(self, mutation, candidates):
+        assert match_mutation(mutation, candidates, 15) in self._VOCAB
+
+    def test_consensus_case_reaches_resolu_consensus(self):
+        candidates = [
+            _dpe("D1", "10 RUE A", surface=50.0, etiquette="D"),
+            _dpe("D2", "10 RUE A", surface=50.0, etiquette="D"),
+        ]
+        status = match_mutation(_mutation("10 RUE A", surface=50.0), candidates, 15)
+        assert status == "resolu_consensus"
 
 
 class TestIndexedMatchesReferenceImplementation:

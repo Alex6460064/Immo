@@ -161,10 +161,40 @@ def _surface_within(mutation: dict, candidats: list[dict]) -> list[dict]:
     ]
 
 
+def _unanimous(subset: list[dict], field: str) -> str | None:
+    """Valeur de `field` si elle est identique et non nulle sur tout le sous-ensemble,
+    sinon None (contexte porte seulement quand certain -- spec §6)."""
+    values = {d.get(field) for d in subset}
+    return next(iter(values)) if len(values) == 1 and None not in values else None
+
+
+def _consensus_pass(subset: list[dict], filtre_type: bool) -> MatchResult:
+    """Passe 4 (spec §4 A2, D5) : si tous les candidats du sous-ensemble partagent
+    la meme `etiquette_dpe` non nulle -> `resolu_consensus` (identite inconnue,
+    etiquette certaine). GES / type / periode portes seulement s'ils sont eux aussi
+    unanimes. Sinon -> `ambigu`."""
+    etiquette = _unanimous(subset, "etiquette_dpe")
+    if etiquette is None:
+        return MatchResult("ambigu", None, None, filtre_type_applique=filtre_type)
+    return MatchResult(
+        "resolu_consensus",
+        None,
+        "consensus_etiquette",
+        filtre_type_applique=filtre_type,
+        etiquette_dpe=etiquette,
+        etiquette_ges=_unanimous(subset, "etiquette_ges"),
+        type_batiment=_unanimous(subset, "type_batiment"),
+        periode_construction=_unanimous(subset, "periode_construction"),
+    )
+
+
 def _surface_tiebreak(
     mutation: dict, candidats: list[dict], methode: str, filtre_type: bool
 ) -> MatchResult:
-    """Passe 3 : un seul candidat dans la tolerance de surface -> trouve ; sinon -> ambigu."""
+    """Passe 3 puis passe 4 : un seul candidat dans la tolerance de surface -> trouve.
+    Sinon, passe 4 consensus sur `within` s'il reste >= 2 candidats, sinon sur le pool
+    d'entree (spec §5 -- quand la surface ne discrimine rien, la question porte sur
+    l'ensemble du batiment)."""
     within = _surface_within(mutation, candidats)
     if len(within) == 1:
         return MatchResult(
@@ -174,7 +204,8 @@ def _surface_tiebreak(
             filtre_type_applique=filtre_type,
             **_context(within[0]),
         )
-    return MatchResult("ambigu", None, None, filtre_type_applique=filtre_type)
+    subset = within if len(within) >= 2 else candidats
+    return _consensus_pass(subset, filtre_type)
 
 
 def _bbox_half_widths(lat: float, seuil_distance_m: float) -> tuple[float, float]:
