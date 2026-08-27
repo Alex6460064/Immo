@@ -1,7 +1,7 @@
 # Design — Récupération des ambigus DVF × DPE (dédup + filtre type + consensus étiquette)
 
 Date : 2026-08-27
-Statut : accepté (grilling 2026-08-27) — implémentation conditionnée au spike (§8)
+Statut : implémenté (2026-08-27) — spike passé, gate = B + C + A2 (consensus étiquette seule)
 Issue : [#23](https://github.com/Alex6460064/Immo/issues/23)
 Contexte lié : [ADR 0003](../../adr/0003-algorithme-appariement-dvf-dpe.md), `NOTES.md` (T10),
 `CONTEXT.md` (terme « Ambigu »), issue #11 (matcher 3 passes livré).
