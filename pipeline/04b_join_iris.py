@@ -36,12 +36,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config.communes import get_codes_insee  # noqa: E402
+from pipeline.lib.ban_client import USER_AGENT  # noqa: E402
+from pipeline.lib.dvf_schema import DVF_GEOCODED_COLUMNS  # noqa: E402
 from pipeline.lib.join_iris import (  # noqa: E402
     assign_iris,
     build_iris_index,
     iris_features_from_geojson,
 )
 from pipeline.lib.parquet_io import read_parquet_rows, write_parquet_rows  # noqa: E402
+from pipeline.lib.reporting import format_pct  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DVF_PATH = ROOT / "data" / "processed" / "dvf_geocoded.parquet"
@@ -50,43 +53,13 @@ OUTPUT_PATH = ROOT / "data" / "processed" / "dvf_iris.parquet"
 
 WFS_URL = "https://data.geopf.fr/wfs/ows"
 WFS_LAYER = "STATISTICALUNITS.IRIS:contours_iris"
-USER_AGENT = "dvf-dpe-pays-basque/0.1 (portfolio project; contact via GitHub Alex6460064/Immo)"
 REQUEST_TIMEOUT_S = 60
 
-_DVF_COLUMNS = [
-    "identifiant_document",
-    "no_disposition",
-    "date_mutation",
-    "nature_mutation",
-    "code_insee",
-    "commune",
-    "code_postal",
-    "adresse_brute",
-    "adresse_normalisee",
-    "type_local",
-    "nombre_pieces_principales",
-    "surface",
-    "prix",
-    "lat",
-    "lon",
-]
-
+# Schema DVF partage (dvf_schema.py, #22) : lecture de dvf_geocoded.parquet a
+# l'identique, + code_iris / nom_iris ajoutes par cette etape.
+_DVF_COLUMNS = list(DVF_GEOCODED_COLUMNS)
 _OUTPUT_COLUMNS = {
-    "identifiant_document": "VARCHAR",
-    "no_disposition": "VARCHAR",
-    "date_mutation": "VARCHAR",
-    "nature_mutation": "VARCHAR",
-    "code_insee": "VARCHAR",
-    "commune": "VARCHAR",
-    "code_postal": "VARCHAR",
-    "adresse_brute": "VARCHAR",
-    "adresse_normalisee": "VARCHAR",
-    "type_local": "VARCHAR",
-    "nombre_pieces_principales": "VARCHAR",
-    "surface": "DOUBLE",
-    "prix": "DOUBLE",
-    "lat": "DOUBLE",
-    "lon": "DOUBLE",
+    **DVF_GEOCODED_COLUMNS,
     "code_iris": "VARCHAR",
     "nom_iris": "VARCHAR",
 }
@@ -197,7 +170,7 @@ def main() -> None:
     hors = counts.get("hors_perimetre_iris", 0)
 
     def pct(n: int) -> str:
-        return f"{n / total * 100:.1f}%" if total else "-"
+        return format_pct(n, total)
 
     print("\n=== Rapport rattachement IRIS (T11 / #12, ADR 0004) ===")
     print(f"  Mutations en entree                        : {total}")

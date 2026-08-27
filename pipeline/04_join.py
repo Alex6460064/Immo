@@ -46,6 +46,7 @@ from pipeline.lib.join_dvf_dpe import (  # noqa: E402
 )
 from pipeline.lib.match_distance import DISTANCE_THRESHOLD_M  # noqa: E402
 from pipeline.lib.parquet_io import read_parquet_rows, write_parquet_rows  # noqa: E402
+from pipeline.lib.reporting import format_pct  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DVF_PATH = ROOT / "data" / "processed" / "dvf_geocoded.parquet"
@@ -112,7 +113,7 @@ def main() -> None:
     filtre_type_count = sum(1 for r in out_rows if r["filtre_type_applique"])
 
     def pct(n: int) -> str:
-        return f"{n / total * 100:.1f}%" if total else "-"
+        return format_pct(n, total)
 
     # Le DPE post-reforme n'existe qu'a partir de juillet 2021 : une paire sur une
     # mutation anterieure apparie un prix ancien a un DPE etabli bien plus tard sur

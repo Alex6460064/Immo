@@ -16,27 +16,12 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 
+from pipeline.lib.dvf_schema import DVF_GEOCODED_COLUMNS
 from pipeline.lib.match_dvf_dpe import build_dpe_index, classify_match_indexed
 
 # Champs de la mutation DVF recopies verbatim dans dvf_dpe_matched.parquet
-# (toutes les colonnes de dvf_geocoded.parquet).
-PASSTHROUGH_DVF_FIELDS = [
-    "identifiant_document",
-    "no_disposition",
-    "date_mutation",
-    "nature_mutation",
-    "code_insee",
-    "commune",
-    "code_postal",
-    "adresse_brute",
-    "adresse_normalisee",
-    "type_local",
-    "nombre_pieces_principales",
-    "surface",
-    "prix",
-    "lat",
-    "lon",
-]
+# (toutes les colonnes de dvf_geocoded.parquet -- schema partage, voir dvf_schema.py, #22).
+PASSTHROUGH_DVF_FIELDS = list(DVF_GEOCODED_COLUMNS)
 
 # Champs lus depuis dpe_clean.parquet pour chaque candidat : identifiant + date
 # (dedup), adresse + coordonnees + surface (passes 1-3), etiquette / GES / type /
@@ -55,23 +40,10 @@ DPE_FIELDS = [
     "lon",
 ]
 
-# Schema de dvf_dpe_matched.parquet : mutation DVF + colonnes d'appariement (#23).
+# Schema de dvf_dpe_matched.parquet : mutation DVF (schema partage, dvf_schema.py)
+# + colonnes d'appariement (#23).
 OUTPUT_COLUMNS = {
-    "identifiant_document": "VARCHAR",
-    "no_disposition": "VARCHAR",
-    "date_mutation": "VARCHAR",
-    "nature_mutation": "VARCHAR",
-    "code_insee": "VARCHAR",
-    "commune": "VARCHAR",
-    "code_postal": "VARCHAR",
-    "adresse_brute": "VARCHAR",
-    "adresse_normalisee": "VARCHAR",
-    "type_local": "VARCHAR",
-    "nombre_pieces_principales": "VARCHAR",
-    "surface": "DOUBLE",
-    "prix": "DOUBLE",
-    "lat": "DOUBLE",
-    "lon": "DOUBLE",
+    **DVF_GEOCODED_COLUMNS,
     "match_status": "VARCHAR",
     "match_methode": "VARCHAR",
     "filtre_type_applique": "BOOLEAN",

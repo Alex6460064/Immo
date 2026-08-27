@@ -164,7 +164,15 @@ def clean_rows(raw_rows: list[tuple]) -> tuple[list[tuple], dict[str, int]]:
 
 
 def write_output(con: duckdb.DuckDBPyConnection, kept_rows: list[tuple], output_path: Path) -> None:
-    """Ecrit les lignes retenues en parquet (ecrase toute sortie precedente)."""
+    """Ecrit les lignes retenues en parquet (ecrase toute sortie precedente).
+
+    N'utilise PAS pipeline.lib.parquet_io.write_parquet_rows (contrairement a 02b/03,
+    #22) : ce chemin ecrit `kept_rows` (des tuples, pas des dict) via une table typee
+    CREATE TABLE + executemany, en conservant `date_mutation` en type DATE natif dans
+    dvf_clean.parquet. parquet_io serialise en JSONL et ramenerait la colonne en
+    texte -- changement du format de sortie, hors scope de #22. La logique ligne a
+    ligne reste en Python pur (voir docstring de module : pas de UDF DuckDB / numpy).
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     columns_sql = ", ".join(f'"{name}" {dtype}' for name, dtype in _OUTPUT_COLUMNS)

@@ -6,9 +6,13 @@ DuckDB + Parquet sans tirer pandas/pyarrow (CLAUDE.md), l'ecriture passe par un
 JSONL temporaire relu via `read_json_auto` avec un schema explicite.
 
 Ces deux fonctions etaient copiees quasi a l'identique dans 04_join.py,
-04b_join_iris.py et 05_aggregate.py -- factorisees ici, testees par un
+04b_join_iris.py et 05_aggregate.py (#11-#13), puis 02b_geocode_ban.py et
+03_clean_dpe.py les ont rejointes (#22) -- factorisees ici, testees par un
 aller-retour, pour qu'un correctif du chemin d'ecriture ne se fasse qu'a un
 seul endroit.
+
+02_clean_dvf.py garde son propre chemin (table typee + executemany, colonne
+DATE native) : voir la docstring de sa fonction write_output.
 """
 
 from __future__ import annotations
