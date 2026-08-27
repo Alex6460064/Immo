@@ -78,3 +78,49 @@ refuse de trancher au hasard (principe de cet ADR). Parmi les 19 721 « trouvé 
 portent sur une mutation antérieure à juillet 2021** — appariées à un DPE forcément
 post-réforme donc établi après la vente ; conservées dans `dvf_dpe_matched.parquet` mais
 exclues de l'agrégat « Impact DPE » (voir `NOTES.md`).
+
+---
+
+## Récupération des ambigus (2026-08-27, [#23](https://github.com/Alex6460064/Immo/issues/23))
+
+L'ambigu de la passe 3 est une ambiguïté **d'identité de l'enregistrement DPE**, pas
+forcément une ambiguïté **de la réponse analytique** : `agg_dpe` (vue Impact DPE) ne consomme
+que `etiquette_dpe` + `type_local`. Trois causes traitables **sans jamais trancher au
+hasard** — spike de mesure d'abord, puis gate (détail chiffré dans `NOTES.md`).
+
+**B — Déduplication des DPE redondants** (`dedup_dpe`, appelée par `classify_match` *et*
+`build_dpe_index` → les deux chemins voient la même liste). Au sein d'une commune et d'une
+`adresse_normalisee` exacte identique, les DPE partageant la signature
+`(surface arrondie 0,1 ; etiquette_dpe ; etiquette_ges ; periode_construction ; type_batiment)`
+sont le même logement diagnostiqué plusieurs fois (renouvellement, correction, DPE de vente).
+On garde le plus récent (`date_etablissement_dpe` max, puis `numero_dpe` max). Adresse vide →
+jamais groupée. La clé fige `etiquette_dpe` + `etiquette_ges` : **fusionner ne change jamais
+une réponse analytique**. Risque assumé : deux logements réellement distincts d'un même
+immeuble, identiques sur toute la signature (immeuble neuf, plans identiques), fusionnés en un
+— sans effet sur `agg_dpe`, seul un `numero_dpe` devient l'un de deux enregistrements
+indistinguables.
+
+**C — Filtre `type_batiment`** : sur un pool > 1 candidats, retire les DPE dont le
+`type_batiment` contredit le `type_local` DVF (`Appartement` ↔ `maison`). `immeuble` (DPE
+collectif) toujours conservé. **Départageur, jamais validateur** : ne s'applique pas à un
+candidat unique, et si le filtre viderait le pool on garde le pool d'origine (*narrow-only*,
+D1) — C ne crée jamais un non-appariement. Colonne de sortie `filtre_type_applique` quand le
+filtre a effectivement retiré ≥ 1 candidat.
+
+**A2 — Passe 4, consensus d'étiquette** : après la passe 3, si celle-ci n'a pas isolé
+exactement 1 candidat, on regarde le sous-ensemble `within` (candidats à ± 2 m²) s'il en
+reste ≥ 2, sinon le pool d'entrée. Si **tous** portent la même `etiquette_dpe` non nulle →
+**`resolu_consensus`** : `numero_dpe` reste `NULL` (identité inconnue), l'étiquette est
+portée (certaine). `etiquette_ges` / `type_batiment` / `periode_construction` portés
+seulement s'ils sont eux aussi unanimes. Consensus sur l'**étiquette seule** (D5) : `agg_dpe`
+ne lit pas le GES, exiger un consensus GES rendrait la récupération plus rare sans gain.
+
+**4e état de sortie.** `match_status` passe de `{trouve, non_trouve, ambigu}` à
+`{trouve, resolu_consensus, non_trouve, ambigu}`. `resolu_consensus` se lit « ambigu sauvé »,
+listé après `trouve` et avant `ambigu` ; il entre dans `agg_dpe` avec la mention « dont N
+résolus par consensus ». Changement de contrat assumé vis-à-vis des critères de l'issue #11.
+
+**Résultat mesuré (jeu courant, B + C + A2 étiquette seule)** :
+**trouvé 37,8 % / resolu_consensus 12,1 % / non trouvé 18,4 % / ambigu 31,7 %**
+(baseline : 34,6 / — / 18,4 / 46,9). Dans le périmètre Impact DPE (mutation ≥ 2021-07) :
++28 % de matière analytique. Détail du spike et du gate dans `NOTES.md`.
