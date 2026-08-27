@@ -1,7 +1,13 @@
 """Chargement + filtrage des donnees du dashboard (vues "Marche" #14 et
 "Impact DPE" #15) -- seam teste sans I/O reelle (CLAUDE.md).
 
-Sources (produites par le pipeline, `data/processed/`) :
+Les sources sont lues depuis `data/processed/` + `data/raw/` si le pipeline a
+tourne localement (les 4 fichiers presents), sinon toutes depuis l'instantane
+versionne `data/dashboard/` (issue #24, `_resolve_sources()` -- tout ou rien,
+jamais un melange de millesimes). C'est ce qui permet `streamlit run` sur un
+clone frais et le deploiement Cloud (#25).
+
+Sources (produites par le pipeline) :
   - `agg_marche.parquet` (05_aggregate) : prix/m2 par commune / annee / type de
     bien -- vue "Marche", courbe de tendance.
   - `agg_iris.parquet` (05_aggregate)   : prix/m2 par IRIS / type -- carte
@@ -40,13 +46,42 @@ from pipeline.lib.aggregate import (
 )
 from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF
 from pipeline.lib.parquet_io import read_parquet_rows
+from pipeline.lib.publish_dashboard import DASHBOARD_MATCHED_COLUMNS
 
 ROOT = Path(__file__).resolve().parent.parent
 PROCESSED = ROOT / "data" / "processed"
-AGG_MARCHE_PATH = PROCESSED / "agg_marche.parquet"
-AGG_IRIS_PATH = PROCESSED / "agg_iris.parquet"
-MATCHED_PATH = PROCESSED / "dvf_dpe_matched.parquet"
-IRIS_GEOJSON_PATH = ROOT / "data" / "raw" / "iris_communes.geojson"
+RAW = ROOT / "data" / "raw"
+# Instantane versionne : le pipeline n'a pas tourne sur un clone frais / le
+# deploiement Cloud (issue #24). `pipeline/06_publish_dashboard_data.py` le produit.
+SNAPSHOT = ROOT / "data" / "dashboard"
+
+
+# Emplacement "live" de chaque source quand le pipeline a tourne localement.
+_LIVE_SOURCES: dict[str, Path] = {
+    "agg_marche.parquet": PROCESSED,
+    "agg_iris.parquet": PROCESSED,
+    "dvf_dpe_matched.parquet": PROCESSED,
+    "iris_communes.geojson": RAW,
+}
+
+
+def _resolve_sources(live_sources: dict[str, Path], snapshot: Path) -> tuple[dict[str, Path], bool]:
+    """Tout ou rien : si les 4 sources "live" sont toutes presentes, le dashboard
+    les utilise ; sinon il sert les 4 depuis l'instantane versionne `snapshot`
+    (#24). Jamais un melange -- une vue "Marche" fraiche a cote d'un taux
+    d'appariement perime serait une supposition silencieuse sur les donnees
+    (CLAUDE.md). Retourne `({nom: chemin}, using_snapshot)`."""
+    using_snapshot = not all((root / name).exists() for name, root in live_sources.items())
+    if using_snapshot:
+        return {name: snapshot / name for name in live_sources}, True
+    return {name: root / name for name, root in live_sources.items()}, False
+
+
+_RESOLVED, USING_SNAPSHOT = _resolve_sources(_LIVE_SOURCES, SNAPSHOT)
+AGG_MARCHE_PATH = _RESOLVED["agg_marche.parquet"]
+AGG_IRIS_PATH = _RESOLVED["agg_iris.parquet"]
+MATCHED_PATH = _RESOLVED["dvf_dpe_matched.parquet"]
+IRIS_GEOJSON_PATH = _RESOLVED["iris_communes.geojson"]
 
 # Types de bien exposes comme filtre de lecture (user story #35). `type_local`
 # reste une dimension de groupement des agregats -- rien n'est exclu en amont.
@@ -78,15 +113,9 @@ TEMPORAL_GAP_NOTE = (
 
 _MARCHE_COLUMNS = ["commune", "annee", "type_local", "n", "moyenne", "mediane"]
 _IRIS_COLUMNS = ["code_iris", "nom_iris", "type_local", "n", "moyenne", "mediane"]
-_MATCHED_COLUMNS = [
-    "commune",
-    "date_mutation",
-    "type_local",
-    "surface",
-    "prix",
-    "match_status",
-    "etiquette_dpe",
-]
+# Source unique : `pipeline.lib.publish_dashboard` (l'instantane #24 ne publie
+# que ces colonnes -- la liste ne peut pas deriver entre les deux).
+_MATCHED_COLUMNS = list(DASHBOARD_MATCHED_COLUMNS)
 
 
 # --- helpers purs ---

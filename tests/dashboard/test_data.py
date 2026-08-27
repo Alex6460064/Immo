@@ -12,9 +12,11 @@ import json
 
 import pytest
 
+from dashboard import data as dashboard_data
 from dashboard.data import (
     DPE_GROUPS,
     MATCH_STATUSES,
+    _resolve_sources,
     color_range,
     commune_choices,
     commune_from_code_iris,
@@ -406,6 +408,45 @@ class TestImpactDpeBreakdown:
 
 def _write(path, rows, types):
     write_parquet_rows(rows, types, path)
+
+
+class TestSourceResolution:
+    """`_resolve_sources` : tout ou rien -- les 4 sources "live" presentes -> on
+    les utilise ; une seule manquante -> les 4 depuis l'instantane `data/dashboard/`
+    (#24, pas de melange de millesimes)."""
+
+    _NAMES = (
+        "agg_marche.parquet",
+        "agg_iris.parquet",
+        "dvf_dpe_matched.parquet",
+        "iris_communes.geojson",
+    )
+
+    def _live(self, root):
+        return {name: root for name in self._NAMES}
+
+    def test_all_live_present_uses_live(self, tmp_path):
+        live, snap = tmp_path / "live", tmp_path / "snap"
+        live.mkdir()
+        for name in self._NAMES:
+            (live / name).write_bytes(b"x")
+        resolved, using_snapshot = _resolve_sources(self._live(live), snap)
+        assert using_snapshot is False
+        assert resolved["dvf_dpe_matched.parquet"] == live / "dvf_dpe_matched.parquet"
+
+    def test_one_missing_falls_back_to_snapshot_for_all(self, tmp_path):
+        live, snap = tmp_path / "live", tmp_path / "snap"
+        live.mkdir()
+        for name in self._NAMES[:-1]:  # geojson manquant
+            (live / name).write_bytes(b"x")
+        resolved, using_snapshot = _resolve_sources(self._live(live), snap)
+        assert using_snapshot is True
+        assert all(path.parent == snap for path in resolved.values())
+
+    def test_matched_columns_come_from_publish_dashboard(self):
+        from pipeline.lib.publish_dashboard import DASHBOARD_MATCHED_COLUMNS
+
+        assert dashboard_data._MATCHED_COLUMNS == list(DASHBOARD_MATCHED_COLUMNS)
 
 
 class TestLoaders:

@@ -9,6 +9,8 @@ data/raw/*
 !data/raw/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+# data/dashboard/ est VOLONTAIREMENT tracke : instantane commite par
+# pipeline/06_publish_dashboard_data.py pour le deploiement Cloud (#24).
 
 # Local agent/session state, not project source
 .claude/

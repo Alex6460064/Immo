@@ -1,5 +1,9 @@
 # DVF × DPE Pays Basque
 
+<!-- TODO(#25) : ajouter ici le badge + le lien vers l'URL *.streamlit.app une fois
+     le dashboard déployé sur Streamlit Community Cloud (share.streamlit.io). -->
+_Dashboard interactif : déploiement Streamlit Community Cloud en cours (#25)._
+
 Croisement des **ventes immobilières officielles** (DVF, DGFiP) et des **diagnostics de
 performance énergétique** (DPE post-réforme, ADEME) sur le littoral Pays Basque et le BAB
 élargi (16 communes, `config/communes.py`).
@@ -34,6 +38,7 @@ uv run python pipeline/03_clean_dpe.py
 uv run python pipeline/04_join.py          # appariement DVF↔DPE (texte → distance → surface) + rapport
 uv run python pipeline/04b_join_iris.py    # rattachement spatial mutation → IRIS
 uv run python pipeline/05_aggregate.py     # agrégats commune / IRIS / étiquette DPE
+uv run python pipeline/06_publish_dashboard_data.py  # instantané versionné data/dashboard/ (déploiement Cloud)
 ```
 
 ## Dashboard
@@ -41,6 +46,10 @@ uv run python pipeline/05_aggregate.py     # agrégats commune / IRIS / étiquet
 ```bash
 uv run streamlit run dashboard/app.py
 ```
+
+Le dashboard lit `data/processed/` si le pipeline a tourné localement, sinon l'instantané
+versionné `data/dashboard/` (régénéré par l'étape 06) — il fonctionne donc sur un clone frais
+sans exécuter le pipeline.
 
 Deux vues :
 

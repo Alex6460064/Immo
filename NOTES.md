@@ -164,3 +164,41 @@ récupère que 5 238 (−2,9 pts de perte pour aucun gain sur `agg_dpe` qui ne l
 briques passent leurs seuils (§8 de la spec) : B analytiquement neutre, C départage 8,9 %
 (≫ 1 %), A2 −12,1 pts d'ambigu (≫ 2 pts). Nouveaux taux de référence pour la non-régression :
 **trouvé 37,8 % / resolu_consensus 12,1 % / non trouvé 18,4 % / ambigu 31,7 %**.
+
+## 2026-08-27 — Instantané de données versionné `data/dashboard/` (#24)
+
+Streamlit Community Cloud déploie **le repo**, sans exécuter le pipeline. Le dashboard lisait
+4 fichiers tous sous `.gitignore` (`data/processed/*`, `data/raw/*`) → rien à afficher sur un
+clone frais.
+
+**Choix** : un dossier **tracké** `data/dashboard/` (2 agrégats + `iris_communes.geojson`
+copiés tels quels ; `dvf_dpe_matched.parquet` réduit aux 7 colonnes lues par le dashboard —
+2,5 Mo → 393 Ko). Produit **uniquement** par `pipeline/06_publish_dashboard_data.py`, jamais
+posé à la main. `dashboard/data.py:_source()` lit `data/processed/<f>` si présent (dev local
+après un run pipeline), sinon l'instantané.
+
+**Idempotence** : agrégats + geojson = copie octet à octet ; le parquet matched est
+re-projeté via DuckDB avec `ORDER BY ALL` pour figer l'ordre des lignes → à version DuckDB
+constante, deux exécutions successives donnent des fichiers identiques (vérifié par hash),
+pas de churn git. Un bump de version DuckDB réécrit le pied de page Parquet (`created_by`)
+sur données identiques — sans conséquence, on recommitte l'instantané régénéré.
+
+**Rafraîchir l'instantané** : après un nouveau run du pipeline, `uv run python
+pipeline/06_publish_dashboard_data.py` puis committer `data/dashboard/`. La liste des 7
+colonnes vit dans `pipeline/lib/publish_dashboard.py` (`DASHBOARD_MATCHED_COLUMNS`),
+importée par `dashboard/data.py` — une seule source, pas de dérive possible.
+
+## 2026-08-27 — Manifeste de dépendances pour Streamlit Cloud (#25)
+
+`requirements.txt` (deps de prod uniquement) plutôt que le support `uv` natif de Streamlit
+Cloud : universel, pas de surprise de résolution côté plateforme. Il se **régénère depuis
+`uv.lock`** (la source de vérité reste `pyproject.toml` + `uv.lock`) :
+
+```bash
+uv export --no-dev --no-hashes --no-emit-project --format requirements-txt -o requirements.txt
+```
+
+À refaire à chaque changement de dépendance. `.python-version` passé de `3.14` à **`3.12`** :
+aligne le runtime Cloud sur `requires-python = ">=3.12"` — 3.12 est disponible partout, pas
+de pari sur la dernière version supportée par la plateforme. Suite pytest vérifiée verte sur
+3.12.

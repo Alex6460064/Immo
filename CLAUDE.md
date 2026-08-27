@@ -116,7 +116,7 @@ commune ne doit toucher qu'un seul endroit.
 data/raw/          # téléchargements bruts, non versionné (.gitignore)
 data/processed/    # données nettoyées / jointes / agrégées
 config/communes.py # codes INSEE ciblés
-pipeline/          # 01_download → 02_clean_dvf → 02b_geocode_ban → 03_clean_dpe → 04_join → 04b_join_iris → 05_aggregate
+pipeline/          # download_dvf(+_historique) + download_dpe → 02_clean_dvf → 02b_geocode_ban → 03_clean_dpe → 04_join → 04b_join_iris → 05_aggregate → 06_publish_dashboard_data
 dashboard/app.py   # Streamlit + Plotly (graphes + carte choroplèthe IRIS)
 notebooks/         # exploration ponctuelle, jamais source de vérité du pipeline
 README.md
@@ -147,14 +147,17 @@ cohérence des totaux avant/après → régression sur le dashboard.
 ## 🔧 WORKFLOW
 
 ```bash
-python pipeline/01_download.py     # télécharge DVF brut + DPE filtrés sur communes ciblées (dept. 64+40)
+python pipeline/download_dvf.py            # DVF brut courant (dept. 64+40)
+python pipeline/download_dvf_historique.py # DVF historique 2016-2020 (miroir cquest, ADR 0005)
+python pipeline/download_dpe.py            # DPE post-réforme filtrés sur les communes ciblées
 python pipeline/02_clean_dvf.py
-python pipeline/02b_geocode_ban.py # géocode les adresses DVF via l'API BAN
+python pipeline/02b_geocode_ban.py         # géocode les adresses DVF via l'API BAN
 python pipeline/03_clean_dpe.py
-python pipeline/04_join.py         # appariement DVF↔DPE (texte → distance → surface) + rapport
-python pipeline/04b_join_iris.py   # rattache chaque mutation géocodée à son IRIS
-python pipeline/05_aggregate.py    # agrégats par commune / IRIS / étiquette DPE
-streamlit run dashboard/app.py     # dashboard interactif
+python pipeline/04_join.py                 # appariement DVF↔DPE (texte → distance → surface) + rapport
+python pipeline/04b_join_iris.py           # rattache chaque mutation géocodée à son IRIS
+python pipeline/05_aggregate.py            # agrégats par commune / IRIS / étiquette DPE
+python pipeline/06_publish_dashboard_data.py  # instantané versionné data/dashboard/ (déploiement Cloud)
+streamlit run dashboard/app.py            # dashboard interactif
 ```
 
 - Validation de référence : chaque script tourne sans erreur, produit une sortie non vide,
