@@ -140,6 +140,50 @@ class TestDedupDpe:
         assert dedup_dpe([]) == []
 
 
+class TestMatchResultCarriesContext:
+    """`MatchResult` porte le contexte bati du DPE apparie (spec §6) : `04_join.py`
+    ne fait plus de lookup `etiquette_by_numero`, tout vient du resultat."""
+
+    def test_trouve_carries_dpe_context(self):
+        dpe = _dpe(
+            "D1",
+            "10 RUE DU MOULIN",
+            etiquette="C",
+            ges="D",
+            type_batiment="appartement",
+            periode="1975-1977",
+        )
+        result = classify_match(_mutation("10 RUE DU MOULIN"), [dpe], 15)
+        assert result.status == "trouve"
+        assert result.etiquette_dpe == "C"
+        assert result.etiquette_ges == "D"
+        assert result.type_batiment == "appartement"
+        assert result.periode_construction == "1975-1977"
+        assert result.filtre_type_applique is False
+
+    def test_trouve_by_surface_carries_context_of_the_chosen_candidate(self):
+        candidates = [
+            _dpe("D1", "5 RUE DES PECHEURS", surface=42.0, etiquette="F", ges="F"),
+            _dpe("D2", "5 RUE DES PECHEURS", surface=88.0, etiquette="B", ges="C"),
+        ]
+        result = classify_match(_mutation("5 RUE DES PECHEURS", surface=87.0), candidates, 15)
+        assert result.numero_dpe == "D2"
+        assert result.etiquette_dpe == "B"
+        assert result.etiquette_ges == "C"
+
+    def test_non_trouve_and_ambigu_carry_no_context(self):
+        non_trouve = classify_match(_mutation("10 RUE DU MOULIN"), [], 15)
+        assert non_trouve.etiquette_dpe is None
+        assert non_trouve.type_batiment is None
+        ambigu_cands = [
+            _dpe("D1", "5 RUE DES PECHEURS", surface=86.0, etiquette="D"),
+            _dpe("D2", "5 RUE DES PECHEURS", surface=88.0, etiquette="E"),
+        ]
+        ambigu = classify_match(_mutation("5 RUE DES PECHEURS", surface=87.0), ambigu_cands, 15)
+        assert ambigu.status == "ambigu"
+        assert ambigu.etiquette_dpe is None
+
+
 class TestPass1ExactText:
     def test_single_exact_address_is_trouve(self):
         candidates = [

@@ -44,17 +44,39 @@ _DEG_LAT_M = 111_320.0
 
 
 class MatchResult(NamedTuple):
-    """Resultat d'appariement d'une mutation.
+    """Resultat d'appariement d'une mutation (spec §6).
 
-    - `status`   : "trouve" | "non_trouve" | "ambigu"
-    - `numero_dpe`: identifiant du DPE apparie (None sauf si status == "trouve")
+    - `status`   : "trouve" | "resolu_consensus" | "non_trouve" | "ambigu"
+    - `numero_dpe`: identifiant du DPE apparie (None sauf si status == "trouve" --
+      pour `resolu_consensus` l'identite reste inconnue)
     - `methode`  : passe ayant conclu -- "texte_exact", "distance",
-      "texte_exact_surface", "distance_surface" (None si non trouve / ambigu)
+      "texte_exact_surface", "distance_surface", "consensus_etiquette"
+      (None si non trouve / ambigu)
+    - `filtre_type_applique` : True si le filtre C `type_batiment` a retire >= 1
+      candidat du pool pour cette mutation (spec §4 C)
+    - `etiquette_dpe` / `etiquette_ges` / `type_batiment` / `periode_construction` :
+      contexte bati, porte depuis le DPE apparie (`trouve`) ou depuis le consensus
+      quand identique sur tout le sous-ensemble ; None sinon
     """
 
     status: str
     numero_dpe: str | None
     methode: str | None
+    filtre_type_applique: bool = False
+    etiquette_dpe: str | None = None
+    etiquette_ges: str | None = None
+    type_batiment: str | None = None
+    periode_construction: str | None = None
+
+
+def _context(dpe: dict) -> dict:
+    """Contexte bati d'un DPE pour `MatchResult` (spec §6)."""
+    return {
+        "etiquette_dpe": dpe.get("etiquette_dpe"),
+        "etiquette_ges": dpe.get("etiquette_ges"),
+        "type_batiment": dpe.get("type_batiment"),
+        "periode_construction": dpe.get("periode_construction"),
+    }
 
 
 def _norm(value) -> str:
@@ -121,7 +143,9 @@ def _surface_tiebreak(mutation: dict, candidats: list[dict], methode: str) -> Ma
         and abs(d["surface_habitable_logement"] - surface_mutation) <= SURFACE_TOLERANCE_M2
     ]
     if len(within) == 1:
-        return MatchResult("trouve", within[0].get("numero_dpe"), f"{methode}_surface")
+        return MatchResult(
+            "trouve", within[0].get("numero_dpe"), f"{methode}_surface", **_context(within[0])
+        )
     return MatchResult("ambigu", None, None)
 
 
@@ -157,12 +181,13 @@ def _resolve(mutation: dict, exact: list[dict], near: list[dict]) -> MatchResult
     `exact` = DPE a adresse_normalisee identique, `near` = DPE geocodes a <= seuil
     (liste vide si la mutation n'a pas de coordonnees : la passe 2 ne trouve rien)."""
     if len(exact) == 1:
-        return MatchResult("trouve", exact[0].get("numero_dpe"), "texte_exact")
+        d = exact[0]
+        return MatchResult("trouve", d.get("numero_dpe"), "texte_exact", **_context(d))
     if len(exact) > 1:
         return _surface_tiebreak(mutation, exact, "texte_exact")
 
     if len(near) == 1:
-        return MatchResult("trouve", near[0].get("numero_dpe"), "distance")
+        return MatchResult("trouve", near[0].get("numero_dpe"), "distance", **_context(near[0]))
     if len(near) > 1:
         return _surface_tiebreak(mutation, near, "distance")
     return MatchResult("non_trouve", None, None)
