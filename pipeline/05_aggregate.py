@@ -5,8 +5,9 @@ data/processed/dvf_dpe_matched.parquet (04_join) et data/processed/dvf_iris.parq
   - data/processed/agg_marche.parquet : prix/m2 moyen+median par commune, annee,
     type de bien -- toutes mutations. Vue "Marche" du dashboard.
   - data/processed/agg_dpe.parquet    : prix/m2 moyen+median par etiquette DPE et
-    type de bien, sur le sous-ensemble "trouve" ET mutation >= juillet 2021
-    (voir ci-dessous). Vue "Impact DPE".
+    type de bien, sur le sous-ensemble a etiquette certaine ("trouve" OU
+    "resolu_consensus", #23) ET mutation >= juillet 2021 (voir ci-dessous). Vue
+    "Impact DPE".
   - data/processed/agg_iris.parquet   : prix/m2 moyen+median par IRIS et type de
     bien -- toutes mutations rattachees. Carte choroplethe.
 
@@ -26,7 +27,10 @@ ANTERIEURES d'un DPE etabli bien plus tard sur la meme adresse -- sur le jeu
 courant, ~53 % des "trouve" sont des mutations < 2021-07. Apparier un prix de 2017
 a un DPE de 2023 ne mesure rien de l'effet du DPE sur ce prix (l'acheteur de 2017
 ne l'a jamais vu). agg_dpe est donc restreint aux mutations >= POST_REFORM_CUTOFF
-(2021-07-01). Ces paires anterieures restent visibles dans dvf_dpe_matched.parquet
+(2021-07-01). Le filtre d'etat retient "trouve" ET "resolu_consensus" (#23 : ambigu
+sauve par consensus d'etiquette -- l'etiquette, seule dimension consommee ici, est
+certaine) ; le resume affiche "dont resolu par consensus". Ces paires anterieures
+restent visibles dans dvf_dpe_matched.parquet
 et sont comptees dans le resume ci-dessous -- pas supprimees, juste hors de cet
 agregat. Le decalage residuel (vente 2021-2022 / DPE 2024) est porte comme
 avertissement sur la vue du dashboard (user story #34).
@@ -54,7 +58,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline.lib.aggregate import aggregate_by, price_per_m2  # noqa: E402
+from pipeline.lib.aggregate import aggregate_by, impact_dpe_rows, price_per_m2  # noqa: E402
 from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF  # noqa: E402
 from pipeline.lib.parquet_io import read_parquet_rows, write_parquet_rows  # noqa: E402
 
@@ -155,13 +159,8 @@ def main() -> None:
     )
 
     agg_marche = aggregate_by(matched, ["commune", "annee", "type_local"])
-    impact_dpe_rows = [
-        r
-        for r in matched
-        if r.get("match_status") == "trouve"
-        and (r.get("date_mutation") or "") >= POST_REFORM_CUTOFF
-    ]
-    agg_dpe = aggregate_by(impact_dpe_rows, ["etiquette_dpe", "type_local"])
+    impact_rows = impact_dpe_rows(matched, POST_REFORM_CUTOFF)
+    agg_dpe = aggregate_by(impact_rows, ["etiquette_dpe", "type_local"])
     agg_iris = aggregate_by(
         [r for r in iris if r.get("code_iris") is not None],
         ["code_iris", "nom_iris", "type_local"],
@@ -172,18 +171,27 @@ def main() -> None:
     write_parquet_rows(agg_iris, _agg_types("code_iris", "nom_iris", "type_local"), OUT_IRIS)
 
     matched_usable = sum(1 for r in matched if r.get("prix_m2") is not None)
-    trouve_usable = sum(
-        1 for r in matched if r.get("prix_m2") is not None and r.get("match_status") == "trouve"
+    etiquette_usable = sum(
+        1
+        for r in matched
+        if r.get("prix_m2") is not None
+        and r.get("match_status") in ("trouve", "resolu_consensus")
     )
-    impact_usable = sum(1 for r in impact_dpe_rows if r.get("prix_m2") is not None)
+    impact_usable = sum(1 for r in impact_rows if r.get("prix_m2") is not None)
+    impact_consensus = sum(
+        1
+        for r in impact_rows
+        if r.get("prix_m2") is not None and r.get("match_status") == "resolu_consensus"
+    )
 
-    print("=== Rapport agregation (T12 / #13) ===")
+    print("=== Rapport agregation (T12 / #13 ; #23 : 4e etat resolu_consensus) ===")
     print(f"  Mutations avec un prix/m2 exploitable    : {matched_usable}")
-    print(f"    dont appariee a un DPE ('trouve')     : {trouve_usable}")
+    print(f"    dont etiquette certaine (trouve + resolu_consensus) : {etiquette_usable}")
     print(f"    dont mutation >= {POST_REFORM_CUTOFF} (retenu pour agg_dpe) : {impact_usable}")
+    print(f"        dont resolu par consensus d'etiquette : {impact_consensus}")
     print(
         f"    dont mutation anterieure (exclu d'agg_dpe, cf. en-tete) : "
-        f"{trouve_usable - impact_usable}"
+        f"{etiquette_usable - impact_usable}"
     )
     print(
         f"  Lignes prix/m2 hors [{_SANITY_MIN:.0f}, {_SANITY_MAX:.0f}] EUR/m2 "
