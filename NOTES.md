@@ -63,3 +63,40 @@ surfaces différentes → prix/m² aberrant sur la ligne du petit lot). Le trait
 aberrations est **Out of Scope** (issue #1). Conséquence assumée : la **médiane** est la
 statistique de référence (robuste), la moyenne est fournie mais sensible. `05_aggregate.py`
 affiche le nombre de lignes hors [200, 30 000] €/m² (jeu courant : 1 753) pour rester visible.
+
+## 2026-08-27 — Récupération des ambigus (#23) : spike de mesure + gate
+
+Script jetable (scratchpad, non versionné) sur le jeu courant (56 929 mutations / 61 277 DPE).
+Baseline reproduit exactement 34,6 / 18,4 / 46,9. Sweep :
+
+| config | trouvé | consensus | non trouvé | ambigu |
+|---|---|---|---|---|
+| baseline (algo actuel) | 34,6 % | — | 18,4 % | **46,9 %** |
+| B (dédup, clé période) | 36,3 % | — | 18,4 % | 45,3 % |
+| B + C (filtre type) | 37,8 % | — | 18,4 % | 43,8 % |
+| **B + C + A2 (consensus étiquette)** | **37,8 %** | **12,1 %** | **18,4 %** | **31,7 %** |
+| B + C + A2 (consensus étiquette **+ GES**) | 37,8 % | 9,2 % | 18,4 % | 34,6 % |
+
+**Dédup B** : clé `période` retire 12 920 DPE (4 533 groupes fusionnés) ; `année` 12 833,
+`signature seule` 13 039 — quasi équivalent, `période` retenu (couverture 100 % vs 48 % pour
+`année`). 4 069 des 4 533 groupes fusionnés ont toutes leurs dates d'établissement < 90 j :
+ce sont des logements à plan identique diagnostiqués ensemble (immeuble neuf), pas des
+renouvellements. Fusion **analytiquement neutre** : la clé inclut `etiquette_dpe` + `etiquette_ges`,
+B ne change donc jamais une étiquette ; `agg_dpe` n'est pas affecté. Risque résiduel = un
+`numero_dpe` qui pointe l'un de deux enregistrements indistinguables — sans effet sur la sortie.
+
+**Filtre C** : resserre le pool sur 5 047 mutations (8,9 %), le vide sur 741 (narrow-only D1 :
+pool gardé, jamais de `non_trouve` créé), et laisse 1 414 `trouvé` pool==1 à type
+contradictoire (C n'est pas un validateur — typo `type_batiment` probable).
+
+**Consensus A2** : étiquette seule fait basculer 6 873 ambigus (−12,1 pts) ; +GES n'en
+récupère que 5 238 (−2,9 pts de perte pour aucun gain sur `agg_dpe` qui ne lit pas le GES).
+**D5 confirmé par les chiffres** : consensus sur `etiquette_dpe` seule.
+
+**Périmètre `agg_dpe` (mutation ≥ 2021-07)** : `trouvé` 10 065 + `resolu_consensus` 2 829 =
+**+28 % de matière analytique**.
+
+**Gate — décision : on implémente B + C + A2 (consensus étiquette seule) en entier.** Les trois
+briques passent leurs seuils (§8 de la spec) : B analytiquement neutre, C départage 8,9 %
+(≫ 1 %), A2 −12,1 pts d'ambigu (≫ 2 pts). Nouveaux taux de référence pour la non-régression :
+**trouvé 37,8 % / resolu_consensus 12,1 % / non trouvé 18,4 % / ambigu 31,7 %**.
