@@ -50,7 +50,9 @@ from pipeline.lib.download_dvf_historique import (  # noqa: E402
     historical_url_for_year,
     historical_years,
     output_path_for_year,
+    require_downstream_columns,
     should_download,
+    validate_historical_header,
 )
 
 DATA_RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
@@ -72,6 +74,12 @@ def download_and_filter_year(year: int, codes_insee: list[str], data_dir: Path) 
         size = _download_with_resume(url, txt_path)
         print(f"[{year}] {size:,} octets telecharges")
 
+        # Le miroir cquest n'a aucune garantie de disponibilite (ADR 0005) : on
+        # verifie que le fichier est bien un DVF pipe-delimite avant de le donner a
+        # DuckDB -- sinon echec explicite plutot qu'une binder error opaque.
+        with txt_path.open("r", encoding="latin-1") as f:
+            validate_historical_header(f.readline())
+
         con = duckdb.connect()
         txt_path_posix = str(txt_path).replace("\\", "/")
 
@@ -86,6 +94,9 @@ def download_and_filter_year(year: int, codes_insee: list[str], data_dir: Path) 
             ).fetchall()
         ]
         aliased_columns = alias_historical_columns(raw_columns)
+        # Drift de schema du miroir (noms de colonnes, delimiteur) -> echec ici,
+        # pas un parquet aval vide.
+        require_downstream_columns(aliased_columns)
         select_list = ", ".join(
             f'"{raw}" AS "{aliased}"' if raw != aliased else f'"{raw}"'
             for raw, aliased in zip(raw_columns, aliased_columns, strict=True)
