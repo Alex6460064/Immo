@@ -109,6 +109,7 @@ def build_clean_record(record: dict) -> dict:
         "etiquette_dpe": record.get("etiquette_dpe"),
         "etiquette_ges": record.get("etiquette_ges"),
         "type_batiment": record.get("type_batiment"),
+        "periode_construction": record.get("periode_construction"),
         "surface_habitable_logement": record.get("surface_habitable_logement"),
         "adresse_brut": adresse_brut,
         "adresse_normalisee": normalize_address(adresse_brut),

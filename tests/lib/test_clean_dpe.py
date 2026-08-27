@@ -134,6 +134,7 @@ class TestBuildCleanRecord:
             "etiquette_dpe": "B",
             "etiquette_ges": "B",
             "type_batiment": "appartement",
+            "periode_construction": "2013-2021",
             "surface_habitable_logement": 63.1,
             "adresse_brut": "27 Allée Docteur Robert Lafon",
             "code_postal_brut": 64100,
@@ -148,6 +149,7 @@ class TestBuildCleanRecord:
         assert clean["etiquette_dpe"] == "B"
         assert clean["etiquette_ges"] == "B"
         assert clean["type_batiment"] == "appartement"
+        assert clean["periode_construction"] == "2013-2021"
         assert clean["surface_habitable_logement"] == 63.1
         assert clean["code_insee_ban"] == "64102"
         assert clean["nom_commune_ban"] == "Bayonne"
@@ -157,6 +159,7 @@ class TestBuildCleanRecord:
         clean = build_clean_record({})
         assert clean["numero_dpe"] is None
         assert clean["surface_habitable_logement"] is None
+        assert clean["periode_construction"] is None
         assert clean["adresse_brut"] == ""
         assert clean["adresse_normalisee"] == ""
 

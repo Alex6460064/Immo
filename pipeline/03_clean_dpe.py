@@ -68,6 +68,7 @@ _CLEAN_COLUMNS = {
     "etiquette_dpe": "VARCHAR",
     "etiquette_ges": "VARCHAR",
     "type_batiment": "VARCHAR",
+    "periode_construction": "VARCHAR",
     "surface_habitable_logement": "DOUBLE",
     "adresse_brut": "VARCHAR",
     "adresse_normalisee": "VARCHAR",
