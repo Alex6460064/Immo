@@ -23,3 +23,31 @@ moins interprétable/défendable qu'un seuil de distance physique ou un écart d
 **Pourquoi documenté** : c'est le cœur méthodologique du projet portfolio — démontre la
 capacité à exploiter toute l'étendue des données disponibles (adresse, géocodage, surface) pour
 résoudre un problème d'appariement ambigu sans sacrifier la fiabilité.
+
+---
+
+## Calibration du seuil de distance (passe 2) — 2026-08-27
+
+Mesuré par `pipeline/calibrate_distance.py` sur **5 733 paires** d'adresses normalisées
+identiques entre DVF et DPE (celles qui passent déjà la passe 1), chacune géocodée des deux
+côtés : distance entre le point BAN côté DVF et le point BAN côté DPE.
+
+| distance | paires | cumul |
+|---|---|---|
+| exactement 0 m | 5 495 | 95,85 % |
+| 0–100 m | 3 | 95,90 % |
+| > 200 m (échec géocodage : repli centroïde commune) | 235 | 100 % |
+
+La distribution est **dégénérée** : quand l'API BAN aboutit des deux côtés, elle renvoie le
+même point (mêmes coordonnées) pour une adresse normalisée identique — pas de bande de
+« jitter » intermédiaire. Les 4,1 % restants sont des échecs de géocodage à l'échelle du
+kilomètre, hors de tout seuil raisonnable (→ classés *non trouvé* par la passe 2, ce qui est
+correct).
+
+**Seuil retenu : `DISTANCE_THRESHOLD_M = 15`** (`pipeline/lib/match_distance.py`). Il ne
+couvre pas un écart-type mesuré (il n'y en a pas) mais fixe la marge pour un texte proche mais
+non identique — suffixe *BIS/TER*, numéro manquant — que BAN interpole vers un point voisin :
+≈ un pas d'interpolation de numéro de voirie en tissu urbain dense (BAB), sans atteindre la
+parcelle mitoyenne. Toute la plage 10–30 m donne le même comportement réel sur l'échantillon
+(95,87 % des paires couvertes). L'estimation « ~15-20 m » du texte ci-dessus est confirmée ;
+15 m est retenu comme borne basse défendable.
