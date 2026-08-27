@@ -1,22 +1,29 @@
-"""Appariement DVF x DPE en 3 passes (ADR 0003) -- logique pure, aucune I/O, aucun reseau.
+"""Appariement DVF x DPE : dedup (B) puis 4 passes (ADR 0003, #23) -- logique pure,
+aucune I/O, aucun reseau.
 
-`pipeline/04_join.py` cable ces fonctions : il lit dvf_geocoded.parquet et
-dpe_clean.parquet, groupe les DPE par commune (code INSEE), et pour chaque
-commune construit un `DpeIndex` (via `build_dpe_index`) qu'il interroge mutation
-par mutation avec `classify_match_indexed`.
+`pipeline/lib/join_dvf_dpe.py` cable ces fonctions : il groupe les DPE par commune
+(code INSEE) et pour chaque commune construit un `DpeIndex` (via `build_dpe_index`)
+interroge mutation par mutation avec `classify_match_indexed`.
 
-Les 3 passes, dans l'ordre (chaque mutation aboutit a exactement un etat --
-CONTEXT.md : trouve / non_trouve / ambigu, jamais un choix force au hasard) :
+**Dedup B** (`dedup_dpe`, appelee par `classify_match` ET `build_dpe_index`) : au sein
+d'une `adresse_normalisee` exacte, les DPE partageant surface (0,1) + etiquette + GES
++ periode + type sont le meme logement diagnostique plusieurs fois -> on garde le plus
+recent. Ne change jamais une reponse analytique (etiquette figee dans la cle).
 
-1. **Texte exact** -- un unique DPE candidat a la meme `adresse_normalisee` (non
-   vide) que la mutation -> trouve. Si plusieurs (immeuble collectif), on passe
-   directement au departage par surface sur ce sous-ensemble.
-2. **Distance geocodee** -- sinon, si la mutation est geocodee, les DPE candidats
-   eux-memes geocodes a <= `seuil_distance_m` du point mutation. Un seul -> trouve.
-   Plusieurs -> departage par surface.
-3. **Departage par surface** -- parmi les candidats retenus par la passe 1 ou 2,
-   ceux dont la surface est a +/- `SURFACE_TOLERANCE_M2` de la surface de la
-   mutation. Un seul -> trouve. Zero, plusieurs, ou surface manquante -> ambigu.
+Puis, pour chaque mutation, exactement un etat -- CONTEXT.md : jamais un choix force
+au hasard -- parmi `trouve` / `resolu_consensus` / `non_trouve` / `ambigu` :
+
+1. **Texte exact** -- unique DPE a la meme `adresse_normalisee` (non vide) -> trouve.
+   Plusieurs (immeuble collectif) -> pool multi-candidats (voir 3-4).
+2. **Distance geocodee** -- sinon, si la mutation est geocodee, DPE candidats a
+   <= `seuil_distance_m`. Un seul -> trouve. Plusieurs -> pool multi-candidats.
+3. **Filtre type + departage surface** -- sur un pool > 1 : filtre C retire les DPE
+   dont `type_batiment` contredit `type_local` (narrow-only : jamais un non-appariement,
+   `immeuble` toujours garde) ; puis un seul candidat a +/- `SURFACE_TOLERANCE_M2` de
+   la surface de la mutation -> trouve.
+4. **Consensus d'etiquette** -- sinon, si tous les candidats du sous-ensemble (within
+   si >= 2, sinon le pool) portent la meme `etiquette_dpe` non nulle -> `resolu_consensus`
+   (identite inconnue, `numero_dpe` NULL, etiquette certaine). Sinon -> `ambigu`.
 
 `classify_match(mutation, dpe_candidats, seuil)` est l'implementation de reference
 (criteres d'acceptation issue #11) : lisible, O(candidats) par mutation.

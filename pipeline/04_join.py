@@ -31,8 +31,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+import duckdb
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from pipeline.lib.aggregate import IMPACT_DPE_STATUSES  # noqa: E402
 from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF  # noqa: E402
 from pipeline.lib.join_dvf_dpe import (  # noqa: E402
     DPE_FIELDS,
@@ -49,6 +52,23 @@ DVF_PATH = ROOT / "data" / "processed" / "dvf_geocoded.parquet"
 DPE_PATH = ROOT / "data" / "processed" / "dpe_clean.parquet"
 OUTPUT_PATH = ROOT / "data" / "processed" / "dvf_dpe_matched.parquet"
 
+def _require_columns(path: Path, columns: list[str], producer: str) -> None:
+    """Sort avec un message clair si `path` n'a pas toutes les `columns` attendues
+    (parquet d'un schema anterieur -- ex. `dpe_clean` d'avant #23, sans
+    `periode_construction`) plutot que de laisser DuckDB lever un Binder Error opaque."""
+    p = str(path).replace("\\", "/").replace("'", "''")
+    described = duckdb.connect().execute(f"DESCRIBE SELECT * FROM '{p}'").fetchall()
+    present = {row[0] for row in described}
+    missing = [c for c in columns if c not in present]
+    if missing:
+        print(
+            f"ERREUR : {path} n'a pas les colonnes {missing} -- schema anterieur.\n"
+            f"  Supprimer le fichier et relancer : python pipeline/{producer}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 def main() -> None:
     for path, prev in ((DVF_PATH, "02b_geocode_ban.py"), (DPE_PATH, "03_clean_dpe.py")):
         if not path.exists():
@@ -62,6 +82,8 @@ def main() -> None:
             "(idempotent). Supprimer le fichier pour forcer un re-run."
         )
         return
+
+    _require_columns(DPE_PATH, DPE_FIELDS, "03_clean_dpe.py")
 
     print(f"[04_join] Lecture de {DVF_PATH}")
     dvf_rows = read_parquet_rows(DVF_PATH, PASSTHROUGH_DVF_FIELDS)
@@ -85,9 +107,7 @@ def main() -> None:
     non_trouve = status_counts.get("non_trouve", 0)
     ambigu = status_counts.get("ambigu", 0)
     methode_counts = Counter(
-        r["match_methode"]
-        for r in out_rows
-        if r["match_status"] in ("trouve", "resolu_consensus")
+        r["match_methode"] for r in out_rows if r["match_status"] in IMPACT_DPE_STATUSES
     )
     filtre_type_count = sum(1 for r in out_rows if r["filtre_type_applique"])
 
@@ -101,7 +121,7 @@ def main() -> None:
     etiquette_certaine_pre_reforme = sum(
         1
         for r in out_rows
-        if r["match_status"] in ("trouve", "resolu_consensus")
+        if r["match_status"] in IMPACT_DPE_STATUSES
         and (r["date_mutation"] or "") < POST_REFORM_CUTOFF
     )
 

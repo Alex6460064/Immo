@@ -58,7 +58,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline.lib.aggregate import aggregate_by, impact_dpe_rows, price_per_m2  # noqa: E402
+from pipeline.lib.aggregate import (  # noqa: E402
+    IMPACT_DPE_STATUSES,
+    aggregate_by,
+    impact_dpe_rows,
+    price_per_m2,
+)
 from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF  # noqa: E402
 from pipeline.lib.parquet_io import read_parquet_rows, write_parquet_rows  # noqa: E402
 
@@ -174,8 +179,7 @@ def main() -> None:
     etiquette_usable = sum(
         1
         for r in matched
-        if r.get("prix_m2") is not None
-        and r.get("match_status") in ("trouve", "resolu_consensus")
+        if r.get("prix_m2") is not None and r.get("match_status") in IMPACT_DPE_STATUSES
     )
     impact_usable = sum(1 for r in impact_rows if r.get("prix_m2") is not None)
     impact_consensus = sum(

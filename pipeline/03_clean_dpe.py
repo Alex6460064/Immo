@@ -182,6 +182,16 @@ def write_parquet(clean_rows: list[dict], output_path: Path) -> None:
         )
 
 
+def _output_columns_current(path: Path) -> bool:
+    """Colonnes du parquet de sortie == `_CLEAN_COLUMNS` ? Un parquet d'un schema
+    anterieur (ex. sans `periode_construction`, ajoutee en #23) ferait planter
+    04_join sur une colonne absente -- on ne saute alors PAS le nettoyage."""
+    path_literal = str(path).replace("\\", "/").replace("'", "''")
+    con = duckdb.connect()
+    present = {row[0] for row in con.execute(f"DESCRIBE SELECT * FROM '{path_literal}'").fetchall()}
+    return set(_CLEAN_COLUMNS) <= present
+
+
 def main() -> None:
     if not RAW_PATH.exists():
         print(f"ERREUR : fichier brut introuvable : {RAW_PATH}", file=sys.stderr)
@@ -189,11 +199,16 @@ def main() -> None:
         sys.exit(1)
 
     if OUTPUT_PATH.exists() and OUTPUT_PATH.stat().st_size > 0:
+        if _output_columns_current(OUTPUT_PATH):
+            print(
+                f"[clean_dpe] Fichier deja present ({OUTPUT_PATH}) -- nettoyage saute "
+                "(idempotent). Supprimer le fichier pour forcer un re-run complet."
+            )
+            return
         print(
-            f"[clean_dpe] Fichier deja present ({OUTPUT_PATH}) -- nettoyage saute "
-            "(idempotent). Supprimer le fichier pour forcer un re-run complet."
+            f"[clean_dpe] {OUTPUT_PATH} a un schema anterieur (colonnes manquantes) -- "
+            "re-nettoyage complet pour le mettre a jour."
         )
-        return
 
     print(f"[clean_dpe] Lecture de {RAW_PATH}")
     records: list[dict] = []

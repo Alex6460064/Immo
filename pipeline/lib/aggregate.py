@@ -26,19 +26,20 @@ def price_per_m2(price: float | None, surface: float | None) -> float | None:
 # Etats d'appariement porteurs d'une etiquette DPE certaine (spec §5, D3) : les deux
 # entrent dans la vue Impact DPE. `resolu_consensus` = identite du DPE inconnue mais
 # etiquette certaine par consensus -- se lit "ambigu sauve", pas "trouve degrade".
-_IMPACT_DPE_STATUSES = ("trouve", "resolu_consensus")
+# Source unique : 04_join.py (rapport) et 05_aggregate.py (resume) l'importent.
+IMPACT_DPE_STATUSES = ("trouve", "resolu_consensus")
 
 
 def impact_dpe_rows(rows: list[dict], post_reform_cutoff: str) -> list[dict]:
     """Sous-ensemble des mutations retenu pour l'agregat Impact DPE (`agg_dpe`) :
-    appariees a une etiquette certaine (`match_status` dans `_IMPACT_DPE_STATUSES`)
+    appariees a une etiquette certaine (`match_status` dans `IMPACT_DPE_STATUSES`)
     ET `date_mutation` >= `post_reform_cutoff` -- apparier un prix anterieur a la
     reforme a un DPE etabli bien plus tard ne mesure rien (NOTES.md 2026-08-27).
     Date absente -> exclue (comparaison lexicographique sur chaine ISO)."""
     return [
         row
         for row in rows
-        if row.get("match_status") in _IMPACT_DPE_STATUSES
+        if row.get("match_status") in IMPACT_DPE_STATUSES
         and (row.get("date_mutation") or "") >= post_reform_cutoff
     ]
 
