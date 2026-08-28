@@ -20,11 +20,12 @@ Sources (produites par le pipeline) :
 --- Choix : vue "Impact DPE" re-agregee a la volee ---
 `agg_dpe.parquet` (#T12) n'est indexe que par (etiquette, type de bien) -- il ne
 permet pas les filtres commune / periode demandes par #15. Cette vue re-agrege
-donc depuis `dvf_dpe_matched.parquet` avec les MÊMES fonctions pures que
-`pipeline/05_aggregate.py` : `mutation_price_points` (repli mutation + garde-fous,
-#26) -> `impact_dpe_rows` -> `aggregate_by`. Sans filtre commune/periode, le
-resultat est exactement `agg_dpe.parquet` (au regroupement d'etiquette pres).
-Voir NOTES.md.
+donc depuis `dvf_dpe_matched.parquet` avec la MÊME chaine que
+`pipeline/05_aggregate.py` : `impact_dpe_slice` (`pipeline/lib/impact_dpe.py`,
+repli mutation + garde-fous #26 -> filtre -> cutoff) puis `aggregate_by`. Le
+filtre de la selection UI est passe en `keep` a `impact_dpe_slice` ; sans filtre
+commune/periode, le resultat est exactement `agg_dpe.parquet` (au regroupement
+d'etiquette pres). Voir NOTES.md et issue #28.
 
 Pas d'import Streamlit ici : le cache (`@st.cache_data`) et l'UI vivent dans
 `dashboard/app.py`.
@@ -34,14 +35,15 @@ from __future__ import annotations
 
 import json
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 import duckdb
 
 from config.communes import COMMUNES
-from pipeline.lib.aggregate import aggregate_by, impact_dpe_rows
+from pipeline.lib.aggregate import aggregate_by
 from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF
+from pipeline.lib.impact_dpe import impact_dpe_slice
 from pipeline.lib.match_dvf_dpe import IMPACT_DPE_STATUSES
 from pipeline.lib.mutations import mutation_price_points
 from pipeline.lib.parquet_io import read_parquet_rows
@@ -323,60 +325,32 @@ def color_range(values: Sequence[float]) -> tuple[float, float] | None:
     return (vs[0], vs[-1])
 
 
-def filter_matched(
-    rows: Sequence[dict],
+def matched_keep(
     *,
     commune: str | None = None,
     type_local: str | None = None,
     date_min: str | None = None,
     date_max: str | None = None,
     groupe: str | None = None,
-) -> list[dict]:
-    """Filtre les lignes brutes de `dvf_dpe_matched` (`date_mutation` = ISO
-    complet). `groupe` compare le regroupement d'etiquette (`dpe_group`, un des
-    `DPE_GROUPS`). Un critere `None` n'exclut rien."""
-    return [
-        r
-        for r in rows
-        if (commune is None or r.get("commune") == commune)
-        and (type_local is None or r.get("type_local") == type_local)
-        and (groupe is None or dpe_group(r.get("etiquette_dpe")) == groupe)
-        and _in_range(r.get("date_mutation"), date_min, date_max)
-    ]
+) -> Callable[[dict], bool]:
+    """Predicat de selection sur une ligne / un point `dvf_dpe_matched`
+    (`date_mutation` = ISO complet). `groupe` compare le regroupement d'etiquette
+    (`dpe_group`, un des `DPE_GROUPS`). Un critere `None` n'exclut rien --
+    `matched_keep()` accepte tout.
 
+    Passe tel quel comme `keep` a `impact_dpe_slice` : c'est la semantique de la
+    selection UI de la vue Impact DPE (#15), la lib d'agregation ne connait pas
+    ces dimensions (issue #28)."""
 
-def _impact_dpe_kept(
-    matched_rows: Sequence[dict],
-    *,
-    commune: str | None,
-    type_local: str | None,
-    date_min: str | None,
-    date_max: str | None,
-    groupe: str | None,
-    cutoff: str,
-) -> list[dict]:
-    """Points prix/m2 retenus pour la vue "Impact DPE" : repli mutation (#26,
-    un point par (mutation, etiquette)) puis filtres de #15 puis `impact_dpe_rows`
-    (etiquette certaine + mutation >= `cutoff`). Base commune a
-    `impact_dpe_aggregate` et `impact_dpe_breakdown`.
+    def keep(r: dict) -> bool:
+        return (
+            (commune is None or r.get("commune") == commune)
+            and (type_local is None or r.get("type_local") == type_local)
+            and (groupe is None or dpe_group(r.get("etiquette_dpe")) == groupe)
+            and _in_range(r.get("date_mutation"), date_min, date_max)
+        )
 
-    Le repli precede les filtres : tous les points d'une mutation partagent
-    commune / type_local / date (mono-type habitation, ADR 0006), donc filtrer
-    les points revient a filtrer les lignes -- mais le prix/m2 est deja calcule
-    sur la surface habitation de TOUTE la mutation, jamais sur le seul lot filtre.
-    """
-    points, _ = mutation_price_points(
-        list(matched_rows), extra_keys=("etiquette_dpe", "match_status")
-    )
-    filtered = filter_matched(
-        points,
-        commune=commune,
-        type_local=type_local,
-        date_min=date_min,
-        date_max=date_max,
-        groupe=groupe,
-    )
-    return impact_dpe_rows(filtered, cutoff)
+    return keep
 
 
 def impact_dpe_aggregate(
@@ -394,24 +368,25 @@ def impact_dpe_aggregate(
     `F-G`, granularite demandee par #15), calcule a la volee depuis les lignes
     d'appariement.
 
-    MÊME chaine pure que `pipeline/05_aggregate.py` (`mutation_price_points` ->
-    `impact_dpe_rows` -> `aggregate_by`), a la difference de la cle de groupe :
-    `agg_dpe.parquet` groupe par etiquette exacte (A..G), cette vue par
-    regroupement -- pour un `n` par barre suffisant sur le petit echantillon
-    apparie. `n` compte des points (mutation x etiquette), pas des lots (#26).
-    Sans filtre commune/periode, les memes mutations sont agregees que dans
-    `agg_dpe.parquet`. Voir NOTES.md.
+    MÊME chaine que `pipeline/05_aggregate.py` (`impact_dpe_slice` -> `aggregate_by`),
+    a la difference de la cle de groupe : `agg_dpe.parquet` groupe par etiquette
+    exacte (A..G), cette vue par regroupement -- pour un `n` par barre suffisant
+    sur le petit echantillon apparie. `n` compte des points (mutation x etiquette),
+    pas des lots (#26). Sans filtre commune/periode, les memes mutations sont
+    agregees que dans `agg_dpe.parquet`. Voir NOTES.md et issue #28.
     """
-    kept = _impact_dpe_kept(
-        matched_rows,
-        commune=commune,
-        type_local=type_local,
-        date_min=date_min,
-        date_max=date_max,
-        groupe=groupe,
+    sl = impact_dpe_slice(
+        list(matched_rows),
         cutoff=cutoff,
+        keep=matched_keep(
+            commune=commune,
+            type_local=type_local,
+            date_min=date_min,
+            date_max=date_max,
+            groupe=groupe,
+        ),
     )
-    enriched = [{**r, "groupe": dpe_group(r.get("etiquette_dpe"))} for r in kept]
+    enriched = [{**r, "groupe": dpe_group(r.get("etiquette_dpe"))} for r in sl.points]
     return aggregate_by(enriched, ["groupe", "type_local"])
 
 
@@ -435,28 +410,25 @@ def impact_dpe_breakdown(
     `pre_reforme_exclus` = points a etiquette certaine mais anterieurs au `cutoff`
     (comptes, pas supprimes -- cf. `TEMPORAL_GAP_NOTE`). Sert la mention
     « dont N resolus par consensus » demandee par #15.
+
+    Lit `impact_dpe_slice` -- MÊME chaine que `impact_dpe_aggregate` et le
+    pipeline (issue #28), plus de recompute local.
     """
-    points, _ = mutation_price_points(
-        list(matched_rows), extra_keys=("etiquette_dpe", "match_status")
-    )
-    kept_pre = filter_matched(
-        points,
-        commune=commune,
-        type_local=type_local,
-        date_min=date_min,
-        date_max=date_max,
-        groupe=groupe,
-    )
-    usable = impact_dpe_rows(kept_pre, cutoff)
-    return {
-        "retenues": len(usable),
-        "resolu_consensus": sum(1 for r in usable if r.get("match_status") == "resolu_consensus"),
-        "pre_reforme_exclus": sum(
-            1
-            for r in kept_pre
-            if r.get("match_status") in IMPACT_DPE_STATUSES
-            and (r.get("date_mutation") or "") < cutoff
+    sl = impact_dpe_slice(
+        list(matched_rows),
+        cutoff=cutoff,
+        keep=matched_keep(
+            commune=commune,
+            type_local=type_local,
+            date_min=date_min,
+            date_max=date_max,
+            groupe=groupe,
         ),
+    )
+    return {
+        "retenues": len(sl.points),
+        "resolu_consensus": sl.resolu_consensus,
+        "pre_reforme_exclus": sl.pre_reforme,
     }
 
 

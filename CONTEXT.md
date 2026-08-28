@@ -72,3 +72,13 @@ reste acceptable dans les textes destinés au grand public, ex. README, post Lin
 Une des communes listées dans `config/communes.py` (littoral Pays Basque + Tarnos/Ondres pour
 comparaison BAB — voir [ADR 0001](docs/adr/0001-communes-hors-dept-64.md)).
 _Avoid_: Zone, périmètre.
+
+**Tranche Impact DPE**:
+Le sous-ensemble des mutations qui alimente la vue « Impact DPE » : à étiquette DPE certaine
+(Taux d'appariement), postérieures à juillet 2021 (DPE post-réforme), avec un prix au m²
+exploitable. Les mutations à étiquette certaine mais antérieures à juillet 2021 en sont
+exclues — comptées, jamais supprimées. Un seul périmètre, calculé une fois, consommé à
+l'identique par l'agrégat du pipeline (`agg_dpe`) et par la ré-agrégation filtrée du dashboard
+([ADR 0006](docs/adr/0006-repli-mutation-prix-m2.md), [#28](https://github.com/Alex6460064/Immo/issues/28)).
+_Avoid_: Échantillon / sous-ensemble Impact DPE ; Vente appariée (moins restrictif — pas de
+seuil temporel ni de garde-fou prix/m²).

@@ -5,45 +5,14 @@ Written before the implementation (TDD, per CLAUDE.md). Seams: `price_per_m2`
 (one mutation's price / m2) and `aggregate_by` (group rows, emit moyenne / mediane
 / n per group). CLAUDE.md / user story #29: no average is emitted without its
 observation count `n`.
+
+`impact_dpe_rows` a demenage vers `pipeline/lib/impact_dpe.py` (issue #28) --
+ses tests sont dans `tests/lib/test_impact_dpe.py`.
 """
 
 import pytest
 
-from pipeline.lib.aggregate import aggregate_by, impact_dpe_rows, price_per_m2
-
-
-class TestImpactDpeRows:
-    """Sous-ensemble de la vue Impact DPE (spec §5, D3) : mutations appariees a une
-    etiquette certaine (`trouve` ou `resolu_consensus`) ET posterieures a la reforme
-    DPE (le DPE post-reforme n'existe pas avant juillet 2021)."""
-
-    _CUTOFF = "2021-07-01"
-
-    def _row(self, status, date):
-        return {"match_status": status, "date_mutation": date, "etiquette_dpe": "D"}
-
-    def test_keeps_trouve_after_cutoff(self):
-        rows = [self._row("trouve", "2023-05-01")]
-        assert impact_dpe_rows(rows, self._CUTOFF) == rows
-
-    def test_keeps_resolu_consensus_after_cutoff(self):
-        rows = [self._row("resolu_consensus", "2022-01-15")]
-        assert impact_dpe_rows(rows, self._CUTOFF) == rows
-
-    def test_drops_ambigu_and_non_trouve(self):
-        rows = [self._row("ambigu", "2023-01-01"), self._row("non_trouve", "2024-01-01")]
-        assert impact_dpe_rows(rows, self._CUTOFF) == []
-
-    def test_drops_matched_mutation_before_cutoff(self):
-        rows = [self._row("trouve", "2018-04-01"), self._row("resolu_consensus", "2020-12-31")]
-        assert impact_dpe_rows(rows, self._CUTOFF) == []
-
-    def test_drops_row_with_missing_date(self):
-        assert impact_dpe_rows([self._row("trouve", None)], self._CUTOFF) == []
-
-    def test_cutoff_date_itself_is_kept(self):
-        rows = [self._row("trouve", "2021-07-01")]
-        assert impact_dpe_rows(rows, self._CUTOFF) == rows
+from pipeline.lib.aggregate import aggregate_by, price_per_m2
 
 
 class TestPricePerM2:

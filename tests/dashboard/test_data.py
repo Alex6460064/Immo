@@ -24,7 +24,6 @@ from dashboard.data import (
     dvf_commune_name,
     filter_iris,
     filter_marche,
-    filter_matched,
     geojson_center,
     impact_dpe_aggregate,
     impact_dpe_breakdown,
@@ -36,6 +35,7 @@ from dashboard.data import (
     load_matching_counts,
     market_trend,
     market_trend_global,
+    matched_keep,
     matching_rate,
 )
 from pipeline.lib.parquet_io import write_parquet_rows
@@ -318,7 +318,10 @@ class TestColorRange:
         assert color_range([]) is None
 
 
-class TestFilterMatched:
+class TestMatchedKeep:
+    """`matched_keep(**criteres)` -> predicat sur une ligne / un point
+    `dvf_dpe_matched`, passe en `keep` a `impact_dpe_slice` (issue #28)."""
+
     _ROWS = [
         {
             "commune": "ANGLET",
@@ -343,29 +346,33 @@ class TestFilterMatched:
         },
     ]
 
+    def _kept(self, **criteres):
+        return [r for r in self._ROWS if matched_keep(**criteres)(r)]
+
+    def test_sans_critere_garde_tout(self):
+        assert self._kept() == self._ROWS
+
     def test_commune(self):
-        assert len(filter_matched(self._ROWS, commune="ANGLET")) == 2
+        assert len(self._kept(commune="ANGLET")) == 2
 
     def test_date_range_inclusive(self):
-        out = filter_matched(self._ROWS, date_min="2021-01-01", date_max="2022-12-31")
+        out = self._kept(date_min="2021-01-01", date_max="2022-12-31")
         assert [r["date_mutation"] for r in out] == ["2022-06-01"]
 
     def test_type_local_and_groupe(self):
         # groupe "F-G" garde la ligne etiquette F, pas la D
-        out = filter_matched(self._ROWS, type_local="Appartement", groupe="F-G")
+        out = self._kept(type_local="Appartement", groupe="F-G")
         assert [r["etiquette_dpe"] for r in out] == ["F"]
 
     def test_groupe_d(self):
-        out = filter_matched(self._ROWS, groupe="D")
-        assert len(out) == 2
+        assert len(self._kept(groupe="D")) == 2
 
 
 class TestImpactDpeAggregate:
     """Re-agregation live de la vue Impact DPE a partir des lignes brutes
-    d'appariement : mêmes fonctions pures que `pipeline/05_aggregate.py`
-    (`impact_dpe_rows` + `aggregate_by`), groupees par regroupement d'etiquette
-    (`DPE_GROUPS`, #15), pour rendre les filtres commune / periode fonctionnels
-    sur cette vue."""
+    d'appariement : même chaine que `pipeline/05_aggregate.py` (`impact_dpe_slice`
+    + `aggregate_by`), groupee par regroupement d'etiquette (`DPE_GROUPS`, #15),
+    pour rendre les filtres commune / periode fonctionnels sur cette vue."""
 
     def _row(self, commune, date, typ, etiq, status, prix, surface):
         return {

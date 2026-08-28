@@ -72,9 +72,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline.lib.aggregate import aggregate_by, impact_dpe_rows  # noqa: E402
+from pipeline.lib.aggregate import aggregate_by  # noqa: E402
 from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF  # noqa: E402
-from pipeline.lib.match_dvf_dpe import IMPACT_DPE_STATUSES  # noqa: E402
+from pipeline.lib.impact_dpe import impact_dpe_slice  # noqa: E402
 from pipeline.lib.mutations import (  # noqa: E402
     NATURES_RETENUES,
     PRIX_M2_MAX,
@@ -170,21 +170,15 @@ def main() -> None:
     iris_hors_perimetre = len(iris_points_all) - len(iris_points)
     agg_iris = aggregate_by(iris_points, ["code_iris", "nom_iris", "type_local"])
 
-    # agg_dpe : un point par (mutation, etiquette) -- puis filtre etiquette
-    # certaine + mutation post-reforme (impact_dpe_rows).
-    dpe_points, dpe_excl = mutation_price_points(
-        matched, extra_keys=("etiquette_dpe", "match_status")
-    )
-    impact_rows = impact_dpe_rows(dpe_points, POST_REFORM_CUTOFF)
-    agg_dpe = aggregate_by(impact_rows, ["etiquette_dpe", "type_local"])
+    # agg_dpe : un point par (mutation, etiquette) -- filtre etiquette certaine
+    # + mutation post-reforme, plus les comptages du rapport (impact_dpe_slice,
+    # meme chaine que la re-agregation live du dashboard, issue #28).
+    sl = impact_dpe_slice(matched, cutoff=POST_REFORM_CUTOFF)
+    agg_dpe = aggregate_by(sl.points, ["etiquette_dpe", "type_local"])
 
     write_parquet_rows(agg_marche, _agg_types("commune", "annee", "type_local"), OUT_MARCHE)
     write_parquet_rows(agg_dpe, _agg_types("etiquette_dpe", "type_local"), OUT_DPE)
     write_parquet_rows(agg_iris, _agg_types("code_iris", "nom_iris", "type_local"), OUT_IRIS)
-
-    impact_consensus = sum(1 for r in impact_rows if r.get("match_status") == "resolu_consensus")
-    etiquette_certaine = sum(1 for r in dpe_points if r.get("match_status") in IMPACT_DPE_STATUSES)
-    etiquette_pre_reforme = etiquette_certaine - len(impact_rows)
 
     print("=== Rapport agregation (T12 / #13 ; #23 ; repli mutation #26 / ADR 0006) ===")
     print(f"  Lignes-lots lues (matched)                   : {len(matched)}")
@@ -193,16 +187,14 @@ def main() -> None:
     _print_exclusions("Carte IRIS (toutes mutations) :", len(iris_points_all), iris_excl)
     print(f"    dont hors perimetre IRIS (non geocodes, hors agg_iris) : {iris_hors_perimetre}")
     print("\n  Impact DPE :")
-    print(f"    points (mutation x etiquette) retenus       : {len(dpe_points)}")
-    print(f"      dont etiquette certaine (trouve + resolu_consensus) : {etiquette_certaine}")
-    print(f"        dont mutation >= {POST_REFORM_CUTOFF} (agg_dpe) : {len(impact_rows)}")
-    print(f"          dont resolu par consensus d'etiquette : {impact_consensus}")
-    print(
-        f"        dont mutation anterieure (exclu d'agg_dpe, cf. en-tete) : {etiquette_pre_reforme}"
-    )
-    print(f"      points (x etiquette) ecartes -- mixte     : {dpe_excl['mixte']}")
-    print(f"      points (x etiquette) ecartes -- nature    : {dpe_excl['nature']}")
-    print(f"      points (x etiquette) ecartes -- hors bande : {dpe_excl['hors_bande']}")
+    print(f"    points (mutation x etiquette) retenus       : {sl.n_points}")
+    print(f"      dont etiquette certaine (trouve + resolu_consensus) : {sl.etiquette_certaine}")
+    print(f"        dont mutation >= {POST_REFORM_CUTOFF} (agg_dpe) : {len(sl.points)}")
+    print(f"          dont resolu par consensus d'etiquette : {sl.resolu_consensus}")
+    print(f"        dont mutation anterieure (exclu d'agg_dpe, cf. en-tete) : {sl.pre_reforme}")
+    print(f"      points (x etiquette) ecartes -- mixte     : {sl.exclusions['mixte']}")
+    print(f"      points (x etiquette) ecartes -- nature    : {sl.exclusions['nature']}")
+    print(f"      points (x etiquette) ecartes -- hors bande : {sl.exclusions['hors_bande']}")
 
     _print_table(
         "agg_marche (commune / annee / type)", agg_marche, ["commune", "annee", "type_local"]

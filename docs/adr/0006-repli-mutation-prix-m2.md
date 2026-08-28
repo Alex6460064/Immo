@@ -89,7 +89,9 @@ correct de « prix médian au m² d'une zone ».
 ### Dashboard
 
 - `dashboard/data.py` : la re-agrégation live de la vue « Impact DPE » utilise la
-  même chaîne (`mutation_price_points` → `impact_dpe_rows` → `aggregate_by`).
+  même chaîne que le pipeline. Depuis l'[issue #28](https://github.com/Alex6460064/Immo/issues/28)
+  cette chaîne est un seul module (`pipeline/lib/impact_dpe.py`, `impact_dpe_slice`)
+  appelé des deux côtés ; le dashboard passe sa sélection UI en prédicat `keep`.
   L'instantané `data/dashboard/dvf_dpe_matched.parquet` gagne trois colonnes
   (`code_insee`, `no_disposition`, `nature_mutation`) requises par la clé de
   mutation et la règle A.

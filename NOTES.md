@@ -6,6 +6,31 @@ arbitrages plus fins, avec leur date et leur justification.
 
 ---
 
+## 2026-08-28 — Chaîne Impact DPE unifiée (`pipeline/lib/impact_dpe.py`, issue #28)
+
+La chaîne `mutation_price_points(extra_keys) → filtre → impact_dpe_rows(cutoff) → aggregate_by`
+était écrite deux fois (`pipeline/05_aggregate.py` pour `agg_dpe.parquet` ; `dashboard/data.py`
+pour la ré-agrégation filtrée de la vue #15), synchronisées seulement par des docstrings.
+Littéral `extra_keys=("etiquette_dpe", "match_status")` répété 3×, comptage pré-réforme écrit
+2× avec des formulations différentes, `impact_dpe_breakdown` recalculant sa propre copie.
+
+**Décision** (grilling 2026-08-28, jumelle de #27) : un seul module `pipeline/lib/impact_dpe.py`
+qui possède `impact_dpe_rows` (déplacé depuis `aggregate.py`) et `impact_dpe_slice(matched_rows,
+*, cutoff, keep=None) → ImpactDpeSlice` (6 champs : `points`, `n_points`, `etiquette_certaine`,
+`resolu_consensus`, `pre_reforme`, `exclusions`). Découpage : la lib = mécanique
+repli/filtre/cutoff + comptages ; le dashboard = sémantique de la sélection UI (`matched_keep`
+construit un prédicat `keep`, `dpe_group` / bornes de période restent côté dashboard).
+`aggregate.py` redevient groupement générique pur. Invariant testé
+(`test_slice_sans_keep_egale_recette_pipeline`) : `impact_dpe_slice` sans `keep` agrège
+exactement les mutations de `agg_dpe.parquet`.
+
+**Non-régression** : sortie stdout de `05_aggregate.py` identique au bit ; sha256 des 3
+`agg_*.parquet` inchangés ; `impact_dpe_aggregate` sans filtre = `agg_dpe` regroupé (A-C
+Appartement 4484 = 49+313+4122, etc.) ; breakdown 10816 / 2546 / 12983 = rapport pipeline.
+`04_join` / `dvf_dpe_matched.parquet` / instantané `data/dashboard/` non touchés.
+
+---
+
 ## 2026-08-28 — Refonte UI dashboard : vue Marché (courbe de référence + toggle stat), vue Impact DPE (commune obligatoire)
 
 **Vue Marché.** Par défaut, une seule courbe : prix/m² **toutes communes confondues** par année,

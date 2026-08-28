@@ -13,8 +13,6 @@ from __future__ import annotations
 import statistics
 from collections import defaultdict
 
-from pipeline.lib.match_dvf_dpe import IMPACT_DPE_STATUSES
-
 
 def price_per_m2(price: float | None, surface: float | None) -> float | None:
     """Prix au m2 d'une mutation. None si prix ou surface manquant / non strictement
@@ -23,20 +21,6 @@ def price_per_m2(price: float | None, surface: float | None) -> float | None:
     if price is None or surface is None or price <= 0 or surface <= 0:
         return None
     return price / surface
-
-
-def impact_dpe_rows(rows: list[dict], post_reform_cutoff: str) -> list[dict]:
-    """Sous-ensemble des mutations retenu pour l'agregat Impact DPE (`agg_dpe`) :
-    appariees a une etiquette certaine (`match_status` dans `IMPACT_DPE_STATUSES`)
-    ET `date_mutation` >= `post_reform_cutoff` -- apparier un prix anterieur a la
-    reforme a un DPE etabli bien plus tard ne mesure rien (NOTES.md 2026-08-27).
-    Date absente -> exclue (comparaison lexicographique sur chaine ISO)."""
-    return [
-        row
-        for row in rows
-        if row.get("match_status") in IMPACT_DPE_STATUSES
-        and (row.get("date_mutation") or "") >= post_reform_cutoff
-    ]
 
 
 def _sort_key(values: tuple) -> tuple:
