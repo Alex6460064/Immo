@@ -152,6 +152,39 @@ class TestMatchAll:
         assert rows[0]["numero_dpe"] == "D2"
 
 
+class TestMatchAllIsOrderIndependent:
+    """#32 : l'appariement ne doit pas dependre de l'ordre physique du parquet
+    `dpe_clean`. `COPY` DuckDB ne fige pas l'ordre des lignes ; deux lignes de
+    meme `numero_dpe` + meme date d'etablissement mais geocodees differemment
+    (cas reel de l'export ADEME) ne doivent pas faire basculer un resultat
+    selon leur ordre d'apparition."""
+
+    _REF_LAT, _REF_LON = 43.4832, -1.5586
+
+    def _geo(self, row, lat, lon):
+        return {**row, "lat": lat, "lon": lon}
+
+    def test_result_invariant_under_dpe_row_permutation(self):
+        mut = self._geo(
+            _mut("64102", "10 RUE DU MOULIN", surface=44.0), self._REF_LAT, self._REF_LON
+        )
+        sig = dict(etiquette="D", ges="D", type_batiment="appartement", periode="2013-2021")
+        near = self._geo(
+            _dpe("SAME", "64102", "12 RUE VOISINE", 44.2, **sig),
+            self._REF_LAT + 0.00005, self._REF_LON,
+        )
+        far = self._geo(
+            _dpe("SAME", "64102", "12 RUE VOISINE", 44.2, **sig),
+            self._REF_LAT + 0.002, self._REF_LON,
+        )
+
+        outcomes = set()
+        for order in ([near, far], [far, near]):
+            rows, _report = match_all([mut], order, _SEUIL)
+            outcomes.add((rows[0]["match_status"], rows[0]["numero_dpe"]))
+        assert len(outcomes) == 1
+
+
 class TestMatchReport:
     def test_methode_counts_only_counts_certain_label_rows(self):
         dvf = [

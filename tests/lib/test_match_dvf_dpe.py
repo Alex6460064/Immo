@@ -137,6 +137,44 @@ class TestDedupDpe:
         assert dedup_dpe([]) == []
 
 
+class TestDedupIsOrderIndependent:
+    """L'export ADEME peut livrer deux lignes de MEME `numero_dpe` + meme date
+    d'etablissement, geocodees differemment (#32). `_recency` les departage a
+    egalite : sans ordre total, le survivant -- et donc l'appariement -- depend
+    de l'ordre physique du parquet `dpe_clean`. Le survivant doit etre le meme
+    quel que soit l'ordre d'entree."""
+
+    _SIG = dict(
+        surface=44.2, etiquette="D", ges="D", type_batiment="appartement", periode="2013-2021"
+    )
+
+    def test_recency_tie_keeps_same_record_whatever_the_input_order(self):
+        a = _dpe(
+            "SAME", "5 RUE A", lat=43.400, lon=-1.600, date_etablissement="2022-03-01", **self._SIG
+        )
+        b = _dpe(
+            "SAME", "5 RUE A", lat=43.401, lon=-1.601, date_etablissement="2022-03-01", **self._SIG
+        )
+        assert dedup_dpe([a, b]) == dedup_dpe([b, a])
+
+    def test_indexed_match_is_stable_when_a_tied_duplicate_straddles_the_threshold(self):
+        # Un des deux doublons est a ~8 m de la mutation (dans le seuil 15 m),
+        # l'autre a ~200 m (hors seuil). Selon le survivant de la dedup, la
+        # mutation est trouve ou non_trouve -- ne doit pas dependre de l'ordre.
+        near = _dpe(
+            "SAME", "12 RUE VOISINE", lat=_REF_LAT + 0.00005, lon=_REF_LON,
+            date_etablissement="2022-03-01", **self._SIG,
+        )
+        far = _dpe(
+            "SAME", "12 RUE VOISINE", lat=_REF_LAT + 0.002, lon=_REF_LON,
+            date_etablissement="2022-03-01", **self._SIG,
+        )
+        mutation = _mutation("10 RUE DU MOULIN", lat=_REF_LAT, lon=_REF_LON, surface=44.0)
+        r1 = classify_match_indexed(mutation, build_dpe_index([near, far], 15))
+        r2 = classify_match_indexed(mutation, build_dpe_index([far, near], 15))
+        assert r1 == r2
+
+
 class TestMatchResultCarriesContext:
     """`MatchResult` porte le contexte bati du DPE apparie (spec §6) : `04_join.py`
     ne fait plus de lookup `etiquette_by_numero`, tout vient du resultat."""

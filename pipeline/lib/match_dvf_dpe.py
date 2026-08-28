@@ -112,11 +112,26 @@ def _dedup_key(dpe: dict) -> tuple:
     )
 
 
-def _recency(dpe: dict) -> tuple[str, str]:
-    """Ordre de recence pour le departage d'un groupe de dedup : date d'etablissement
-    la plus recente, puis `numero_dpe` max (departage deterministe). Date absente ->
-    trie en dernier (cas theorique, tous les DPE retenus etant post-reforme donc dates)."""
-    return (dpe.get("date_etablissement_dpe") or "", dpe.get("numero_dpe") or "")
+def _sortable(value: float | None) -> tuple[bool, float]:
+    """Rend une valeur numerique potentiellement absente comparable (None en tete)."""
+    return (value is not None, value if value is not None else 0.0)
+
+
+def _recency(dpe: dict) -> tuple:
+    """Ordre de departage d'un groupe de dedup : date d'etablissement la plus recente,
+    puis `numero_dpe` max. Si deux lignes partagent date + `numero_dpe` -- l'export
+    ADEME peut livrer un meme DPE geocode differemment (#32) --, on departage encore
+    sur lat / lon / surface : sans ce complement, `max` renvoie le premier a egalite,
+    donc le survivant (et l'appariement) depend de l'ordre physique du parquet
+    `dpe_clean`. Date absente -> trie en dernier (cas theorique, tous les DPE retenus
+    etant post-reforme donc dates)."""
+    return (
+        dpe.get("date_etablissement_dpe") or "",
+        dpe.get("numero_dpe") or "",
+        _sortable(dpe.get("lat")),
+        _sortable(dpe.get("lon")),
+        _sortable(dpe.get("surface_habitable_logement")),
+    )
 
 
 def dedup_dpe(dpe_candidats: list[dict]) -> list[dict]:
