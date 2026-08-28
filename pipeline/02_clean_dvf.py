@@ -39,15 +39,7 @@ import duckdb
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config.communes import get_codes_insee  # noqa: E402
-from pipeline.lib.clean_dvf import (  # noqa: E402
-    EXCLUDED_ZERO_PRICE,
-    EXCLUDED_ZERO_SURFACE,
-    KEPT,
-    classify_row,
-    compose_address,
-    parse_french_decimal,
-)
-from pipeline.lib.normalize_address import normalize_address  # noqa: E402
+from pipeline.lib.clean_dvf import process_rows  # noqa: E402
 
 DATA_RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 DATA_PROCESSED_DIR = Path(__file__).resolve().parent.parent / "data" / "processed"
@@ -59,21 +51,21 @@ OUTPUT_PATH = DATA_PROCESSED_DIR / "dvf_clean.parquet"
 # matche jamais les codes INSEE < 100 de config/communes.py.
 _RAW_SELECT_QUERY = """
     SELECT
-        "Identifiant de document",
-        "No disposition",
-        CAST(strptime("Date mutation", '%d/%m/%Y') AS DATE),
-        "Nature mutation",
-        "Valeur fonciere",
-        "No voie",
-        "B/T/Q",
-        "Type de voie",
-        "Voie",
-        "Code postal",
-        "Commune",
+        "Identifiant de document" AS identifiant_document,
+        "No disposition" AS no_disposition,
+        CAST(strptime("Date mutation", '%d/%m/%Y') AS DATE) AS date_mutation,
+        "Nature mutation" AS nature_mutation,
+        "Valeur fonciere" AS valeur_fonciere,
+        "No voie" AS no_voie,
+        "B/T/Q" AS btq,
+        "Type de voie" AS type_voie,
+        "Voie" AS voie,
+        "Code postal" AS code_postal,
+        "Commune" AS commune,
         "Code departement" || LPAD("Code commune", 3, '0') AS code_insee,
-        "Type local",
-        "Nombre pieces principales",
-        "Surface reelle bati"
+        "Type local" AS type_local,
+        "Nombre pieces principales" AS nombre_pieces_principales,
+        "Surface reelle bati" AS surface_reelle_bati
     FROM read_parquet(?)
     WHERE "Code departement" || LPAD("Code commune", 3, '0') IN ({codes_list})
 """
@@ -95,83 +87,25 @@ _OUTPUT_COLUMNS = [
 ]
 
 
-def load_raw_rows(con: duckdb.DuckDBPyConnection, codes_insee: list[str]) -> list[tuple]:
-    """Charge les lignes DVF brutes des communes ciblees depuis data/raw/."""
+def load_raw_rows(con: duckdb.DuckDBPyConnection, codes_insee: list[str]) -> list[dict]:
+    """Charge les lignes DVF brutes des communes ciblees depuis data/raw/ (un dict
+    par ligne, colonnes nommees -- voir les alias de `_RAW_SELECT_QUERY`)."""
     codes_list = ", ".join(f"'{c}'" for c in codes_insee)
     query = _RAW_SELECT_QUERY.format(codes_list=codes_list)
-    return con.execute(query, [RAW_GLOB]).fetchall()
+    result = con.execute(query, [RAW_GLOB])
+    names = [d[0] for d in result.description]
+    return [dict(zip(names, row, strict=True)) for row in result.fetchall()]
 
 
-def clean_rows(raw_rows: list[tuple]) -> tuple[list[tuple], dict[str, int]]:
-    """Compose/normalise l'adresse, parse prix/surface, classe chaque ligne brute.
-
-    Retourne (lignes retenues au format table de sortie, compteur par classification).
-    Les lignes exclues ne sont pas retournees mais sont comptees -- voir le resume
-    imprime par main() pour qu'elles restent visibles (jamais silencieusement supprimees).
-    """
-    kept: list[tuple] = []
-    counts: dict[str, int] = {KEPT: 0, EXCLUDED_ZERO_PRICE: 0, EXCLUDED_ZERO_SURFACE: 0}
-
-    for row in raw_rows:
-        (
-            identifiant_document,
-            no_disposition,
-            date_mutation,
-            nature_mutation,
-            valeur_fonciere,
-            no_voie,
-            btq,
-            type_voie,
-            voie,
-            code_postal,
-            commune,
-            code_insee,
-            type_local,
-            nombre_pieces_principales,
-            surface_reelle_bati,
-        ) = row
-
-        prix = parse_french_decimal(valeur_fonciere)
-        surface = parse_french_decimal(surface_reelle_bati)
-        classification = classify_row(prix, surface)
-        counts[classification] += 1
-
-        if classification != KEPT:
-            continue
-
-        adresse_brute = compose_address(no_voie, btq, type_voie, voie)
-        adresse_normalisee = normalize_address(adresse_brute)
-
-        kept.append(
-            (
-                identifiant_document,
-                no_disposition,
-                date_mutation,
-                nature_mutation,
-                code_insee,
-                commune,
-                code_postal,
-                adresse_brute,
-                adresse_normalisee,
-                type_local,
-                nombre_pieces_principales,
-                surface,
-                prix,
-            )
-        )
-
-    return kept, counts
-
-
-def write_output(con: duckdb.DuckDBPyConnection, kept_rows: list[tuple], output_path: Path) -> None:
+def write_output(con: duckdb.DuckDBPyConnection, kept_rows: list[dict], output_path: Path) -> None:
     """Ecrit les lignes retenues en parquet (ecrase toute sortie precedente).
 
     N'utilise PAS pipeline.lib.parquet_io.write_parquet_rows (contrairement a 02b/03,
-    #22) : ce chemin ecrit `kept_rows` (des tuples, pas des dict) via une table typee
-    CREATE TABLE + executemany, en conservant `date_mutation` en type DATE natif dans
-    dvf_clean.parquet. parquet_io serialise en JSONL et ramenerait la colonne en
-    texte -- changement du format de sortie, hors scope de #22. La logique ligne a
-    ligne reste en Python pur (voir docstring de module : pas de UDF DuckDB / numpy).
+    #22) : ce chemin ecrit via une table typee CREATE TABLE + executemany, en
+    conservant `date_mutation` en type DATE natif dans dvf_clean.parquet. parquet_io
+    serialise en JSONL et ramenerait la colonne en texte -- changement du format de
+    sortie, hors scope de #22. Les dict de `process_rows` sont convertis en tuples
+    dans l'ordre de `_OUTPUT_COLUMNS` pour l'executemany.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -179,7 +113,8 @@ def write_output(con: duckdb.DuckDBPyConnection, kept_rows: list[tuple], output_
     con.execute("CREATE OR REPLACE TABLE dvf_clean (" + columns_sql + ")")
 
     placeholders = ", ".join("?" for _ in _OUTPUT_COLUMNS)
-    con.executemany(f"INSERT INTO dvf_clean VALUES ({placeholders})", kept_rows)
+    tuples = [tuple(row[name] for name, _ in _OUTPUT_COLUMNS) for row in kept_rows]
+    con.executemany(f"INSERT INTO dvf_clean VALUES ({placeholders})", tuples)
 
     literal = str(output_path).replace("\\", "/").replace("'", "''")
     con.execute(f"COPY dvf_clean TO '{literal}' (FORMAT PARQUET)")
@@ -202,25 +137,26 @@ def main() -> None:
     rows_in = len(raw_rows)
     print(f"Lignes DVF brutes chargees (communes ciblees, tous millesimes) : {rows_in}")
 
-    kept_rows, counts = clean_rows(raw_rows)
+    kept_rows, exclusions = process_rows(raw_rows)
     write_output(con, kept_rows, OUTPUT_PATH)
 
-    rows_out = counts[KEPT]
+    rows_out = len(kept_rows)
     rows_excluded = rows_in - rows_out
 
     print("\n=== Resume nettoyage DVF (data/processed/dvf_clean.parquet) ===")
     print(f"  Lignes en entree      : {rows_in}")
     print(f"  Lignes en sortie      : {rows_out}")
     print(f"  Lignes exclues        : {rows_excluded}")
-    print(f"    dont prix nul/manquant     : {counts[EXCLUDED_ZERO_PRICE]}")
+    print(f"    dont prix nul/manquant     : {exclusions.excluded_zero_price}")
     print(
-        f"    dont surface nulle/manquante (apres exclusion prix) : {counts[EXCLUDED_ZERO_SURFACE]}"
+        "    dont surface nulle/manquante (apres exclusion prix) : "
+        f"{exclusions.excluded_zero_surface}"
     )
     if rows_in:
         print(f"  Taux de conservation  : {rows_out / rows_in:.1%}")
 
     if kept_rows:
-        by_commune = Counter(row[5] for row in kept_rows)  # index 5 = commune
+        by_commune = Counter(row["commune"] for row in kept_rows)
         print("\n  Repartition des lignes retenues par commune :")
         for commune, count in sorted(by_commune.items(), key=lambda kv: -kv[1]):
             print(f"    {commune:<25} {count:>6}")

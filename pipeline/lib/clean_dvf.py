@@ -1,8 +1,8 @@
 """Pure logic for cleaning raw DVF (DGFiP) mutations before the DVF x DPE join.
 
 No I/O, no DuckDB connection opened here (see CLAUDE.md architecture convention) --
-`pipeline/02_clean_dvf.py` wires these functions to the raw parquet files via DuckDB
-Python UDFs and writes the cleaned output.
+`pipeline/02_clean_dvf.py` reads the raw parquet rows via DuckDB, passes them to
+`process_rows`, and writes the cleaned output.
 
 Design choices (documented per CLAUDE.md -- no silent assumptions):
 
@@ -34,6 +34,9 @@ Design choices (documented per CLAUDE.md -- no silent assumptions):
 from __future__ import annotations
 
 import re
+from typing import NamedTuple
+
+from pipeline.lib.normalize_address import normalize_address
 
 _WHITESPACE_RE = re.compile(r"\s+")
 
@@ -120,3 +123,60 @@ def build_geocoding_query(row: dict) -> str | None:
         parts.append(commune)
 
     return " ".join(parts)
+
+
+class ExclusionStats(NamedTuple):
+    """Comptage des lignes DVF brutes ecartees par `process_rows`, par raison
+    (miroir du dict d'exclusions de `clean_dpe.process_records`). Le nombre de
+    lignes retenues n'est pas ici -- c'est `len()` de la liste retournee."""
+
+    excluded_zero_price: int
+    excluded_zero_surface: int
+
+
+def process_rows(raw_rows: list[dict]) -> tuple[list[dict], ExclusionStats]:
+    """Nettoie un lot de lignes DVF brutes (dict, colonnes nommees par
+    `load_raw_rows` de `02_clean_dvf.py`) : parse prix/surface, classe, et pour
+    les lignes retenues compose + normalise l'adresse. Miroir de
+    `clean_dpe.process_records`.
+
+    Retourne (lignes retenues au schema de sortie, `ExclusionStats`). Les lignes
+    ecartees sont comptees, jamais retournees -- elles restent visibles via le
+    resume imprime par `main()` (CLAUDE.md : jamais de suppression silencieuse).
+    """
+    kept: list[dict] = []
+    excluded_zero_price = 0
+    excluded_zero_surface = 0
+
+    for row in raw_rows:
+        prix = parse_french_decimal(row["valeur_fonciere"])
+        surface = parse_french_decimal(row["surface_reelle_bati"])
+        classification = classify_row(prix, surface)
+
+        if classification == EXCLUDED_ZERO_PRICE:
+            excluded_zero_price += 1
+            continue
+        if classification == EXCLUDED_ZERO_SURFACE:
+            excluded_zero_surface += 1
+            continue
+
+        adresse_brute = compose_address(row["no_voie"], row["btq"], row["type_voie"], row["voie"])
+        kept.append(
+            {
+                "identifiant_document": row["identifiant_document"],
+                "no_disposition": row["no_disposition"],
+                "date_mutation": row["date_mutation"],
+                "nature_mutation": row["nature_mutation"],
+                "code_insee": row["code_insee"],
+                "commune": row["commune"],
+                "code_postal": row["code_postal"],
+                "adresse_brute": adresse_brute,
+                "adresse_normalisee": normalize_address(adresse_brute),
+                "type_local": row["type_local"],
+                "nombre_pieces_principales": row["nombre_pieces_principales"],
+                "surface": surface,
+                "prix": prix,
+            }
+        )
+
+    return kept, ExclusionStats(excluded_zero_price, excluded_zero_surface)
