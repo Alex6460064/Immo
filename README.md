@@ -15,12 +15,13 @@ limites méthodologiques (taux d'appariement, biais temporel), jamais masquées.
 ## Stack
 
 Python + [uv](https://docs.astral.sh/uv/) · DuckDB · Parquet · Streamlit + Plotly ·
-pytest + ruff (CI GitHub Actions).
+matplotlib (synthèse PDF, groupe `report`) · pytest + ruff (CI GitHub Actions).
 
 ## Installation
 
 ```bash
-uv sync
+uv sync                     # pipeline + dashboard
+uv sync --group report      # + matplotlib, pour régénérer la synthèse PDF (étape 07)
 ```
 
 ## Pipeline
@@ -39,7 +40,12 @@ uv run python pipeline/04_join.py          # appariement DVF↔DPE (texte → di
 uv run python pipeline/04b_join_iris.py    # rattachement spatial mutation → IRIS
 uv run python pipeline/05_aggregate.py     # agrégats commune / IRIS / étiquette DPE
 uv run python pipeline/06_publish_dashboard_data.py  # instantané versionné data/dashboard/ (déploiement Cloud)
+uv run --group report python pipeline/07_report.py   # synthèse PDF (reports/, lit data/dashboard/)
 ```
+
+L'étape 07 est en aval de l'instantané `data/dashboard/` : elle ne relit jamais
+`data/processed/` et se régénère sur un clone frais. Le PDF produit est reproductible bit à
+bit (métadonnées de date figées), comme `data/dashboard/`.
 
 ## Dashboard
 
@@ -66,6 +72,16 @@ Deux vues :
   avec le **taux d'appariement** (4 états : trouvé / résolu par consensus / non trouvé /
   ambigu) et l'avertissement sur le décalage temporel DVF / DPE affichés en clair. Filtres :
   commune, période, type de bien, regroupement DPE.
+
+## Synthèse PDF
+
+[`reports/synthese-pays-basque.pdf`](reports/synthese-pays-basque.pdf) — 6 pages, Bayonne /
+Anglet / Biarritz : évolution du prix/m² moyen (Appartement / Maison, 2016-2025) avec les
+variations sur ~10 ans, 5 ans et 1 an ; prix/m² moyen par étiquette DPE et par commune depuis
+la réforme, suivi d'une lecture critique du biais de localisation (les passoires F/G,
+concentrées dans l'ancien cher du centre et du front de mer, ne laissent apparaître aucune
+décote DPE lisible sur donnée brute). Régénéré par `pipeline/07_report.py` à partir de
+l'instantané `data/dashboard/`.
 
 ## Tests
 

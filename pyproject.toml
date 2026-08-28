@@ -15,6 +15,12 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.16.4",
 ]
+# Genere la synthese PDF (pipeline/07_report.py) uniquement -- hors chemin de
+# deploiement (dashboard Cloud) et hors CI (aucun test n'importe 07_report ni
+# matplotlib). Groupe non-defaut : `uv sync --group report` pour l'installer.
+report = [
+    "matplotlib>=3.9",
+]
 
 [tool.ruff]
 line-length = 100

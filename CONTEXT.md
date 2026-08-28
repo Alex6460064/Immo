@@ -66,7 +66,7 @@ Zonage statistique officiel infra-communal (INSEE/IGN), utilisé comme unité d'
 la carte choroplèthe (voir [ADR 0004](docs/adr/0004-carte-choroplethe-iris.md)). Une commune de
 petite taille peut n'avoir qu'un seul IRIS couvrant tout son territoire.
 _Avoid_: Quartier (IRIS est le terme technique précis utilisé dans le code/data ; "quartier"
-reste acceptable dans les textes destinés au grand public, ex. README, post LinkedIn).
+reste acceptable dans les textes destinés au grand public, ex. README, synthèse PDF).
 
 **Commune ciblée**:
 Une des communes listées dans `config/communes.py` (littoral Pays Basque + Tarnos/Ondres pour

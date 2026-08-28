@@ -3,10 +3,10 @@
 Projet data portfolio : croiser les ventes immobilières officielles (DVF) et les diagnostics
 de performance énergétique (DPE ADEME) sur les communes du littoral Pays Basque + BAB élargi
 (liste précise dans `config/communes.py`). Objectif : un pipeline de données propre et
-documenté, un dashboard interactif, et un post de vulgarisation — le tout comme preuve de
+documenté, un dashboard interactif, et une synthèse PDF — le tout comme preuve de
 compétence data/IA pour des recruteurs.
 
-Livrables : (1) repo GitHub propre avec page READ ME explicative, (2) dashboard web interactif, (3) post LinkedIn/blog.
+Livrables : (1) repo GitHub propre avec page READ ME explicative, (2) dashboard web interactif, (3) synthèse PDF versionnée (`reports/`, générée par `pipeline/07_report.py`).
 
 ---
 
@@ -116,8 +116,9 @@ commune ne doit toucher qu'un seul endroit.
 data/raw/          # téléchargements bruts, non versionné (.gitignore)
 data/processed/    # données nettoyées / jointes / agrégées
 config/communes.py # codes INSEE ciblés
-pipeline/          # download_dvf(+_historique) + download_dpe → 02_clean_dvf → 02b_geocode_ban → 03_clean_dpe → 04_join → 04b_join_iris → 05_aggregate → 06_publish_dashboard_data
+pipeline/          # download_dvf(+_historique) + download_dpe → 02_clean_dvf → 02b_geocode_ban → 03_clean_dpe → 04_join → 04b_join_iris → 05_aggregate → 06_publish_dashboard_data → 07_report
 dashboard/app.py   # Streamlit + Plotly (graphes + carte choroplèthe IRIS)
+reports/           # synthèse PDF versionnée (07_report.py), livrable recruteurs
 notebooks/         # exploration ponctuelle, jamais source de vérité du pipeline
 README.md
 ```
@@ -157,9 +158,10 @@ cohérence des totaux avant/après → régression sur le dashboard.
   Streamlit Cloud sert encore l'ancien build (`@st.cache_data` keyé sur les args, pas la mtime).
   Vérifier d'abord le parquet committé ; si bon → **Reboot app + Clear cache** sur
   share.streamlit.io, pas de rerun pipeline.
-- **Fix en aval (agrégation/publish) = ne pas relancer download/clean/geocode/join.** Seuls
-  `05_aggregate` + `06_publish_dashboard_data` sont concernés ; le commit du fix versionne déjà
-  les instantanés `data/dashboard/`.
+- **Fix en aval (agrégation/publish/synthèse) = ne pas relancer download/clean/geocode/join.**
+  Seuls `05_aggregate` + `06_publish_dashboard_data` (+ `07_report` pour le PDF) sont
+  concernés ; le commit du fix versionne déjà les instantanés `data/dashboard/` et le PDF.
+  `07_report` lit `data/dashboard/`, jamais `data/processed/` : régénérable sur un clone frais.
 
 ## 🔧 WORKFLOW
 
@@ -174,6 +176,7 @@ python pipeline/04_join.py                 # appariement DVF↔DPE (texte → di
 python pipeline/04b_join_iris.py           # rattache chaque mutation géocodée à son IRIS
 python pipeline/05_aggregate.py            # agrégats par commune / IRIS / étiquette DPE
 python pipeline/06_publish_dashboard_data.py  # instantané versionné data/dashboard/ (déploiement Cloud)
+python pipeline/07_report.py              # synthèse PDF recruteurs (reports/, lit data/dashboard/)
 streamlit run dashboard/app.py            # dashboard interactif
 ```
 
