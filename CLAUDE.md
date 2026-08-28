@@ -144,6 +144,23 @@ cohérence des totaux avant/après → régression sur le dashboard.
 
 ---
 
+## 💻 ENVIRONNEMENT LOCAL (Windows — lire avant de lancer du Python)
+
+- **`.venv\Scripts\python.exe` est bloqué** par la stratégie de contrôle d'application Windows
+  (« os error 4551 »). `uv run`, `py`, PowerShell `&` sur ce binaire échouent tous. Ne pas
+  perdre de temps à réessayer.
+- **Utiliser le Python système** :
+  `C:\Users\alexa\AppData\Local\Programs\Python\Python314\python.exe` (a `duckdb` 1.5.5, **pas
+  `pandas`** → `.fetchall()` sur les résultats DuckDB, jamais `.df()`). Lancer depuis la racine
+  du repo pour les imports du projet.
+- **Dashboard périmé après un fix data** : le repo/local peut être correct alors que
+  Streamlit Cloud sert encore l'ancien build (`@st.cache_data` keyé sur les args, pas la mtime).
+  Vérifier d'abord le parquet committé ; si bon → **Reboot app + Clear cache** sur
+  share.streamlit.io, pas de rerun pipeline.
+- **Fix en aval (agrégation/publish) = ne pas relancer download/clean/geocode/join.** Seuls
+  `05_aggregate` + `06_publish_dashboard_data` sont concernés ; le commit du fix versionne déjà
+  les instantanés `data/dashboard/`.
+
 ## 🔧 WORKFLOW
 
 ```bash
