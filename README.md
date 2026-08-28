@@ -1,8 +1,8 @@
 # DVF × DPE Pays Basque
 
-<!-- TODO(#25) : ajouter ici le badge + le lien vers l'URL *.streamlit.app une fois
-     le dashboard déployé sur Streamlit Community Cloud (share.streamlit.io). -->
-_Dashboard interactif : déploiement Streamlit Community Cloud en cours (#25)._
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://dvf-dpe-pays-basque.streamlit.app/)
+
+**Dashboard interactif → https://dvf-dpe-pays-basque.streamlit.app/** (Streamlit Community Cloud).
 
 Croisement des **ventes immobilières officielles** (DVF, DGFiP) et des **diagnostics de
 performance énergétique** (DPE post-réforme, ADEME) sur le littoral Pays Basque et le BAB
