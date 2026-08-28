@@ -40,12 +40,9 @@ from pathlib import Path
 import duckdb
 
 from config.communes import COMMUNES
-from pipeline.lib.aggregate import (
-    IMPACT_DPE_STATUSES,
-    aggregate_by,
-    impact_dpe_rows,
-)
+from pipeline.lib.aggregate import aggregate_by, impact_dpe_rows
 from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF
+from pipeline.lib.match_dvf_dpe import IMPACT_DPE_STATUSES
 from pipeline.lib.mutations import mutation_price_points
 from pipeline.lib.parquet_io import read_parquet_rows
 from pipeline.lib.publish_dashboard import DASHBOARD_MATCHED_COLUMNS

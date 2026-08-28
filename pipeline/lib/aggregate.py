@@ -13,6 +13,8 @@ from __future__ import annotations
 import statistics
 from collections import defaultdict
 
+from pipeline.lib.match_dvf_dpe import IMPACT_DPE_STATUSES
+
 
 def price_per_m2(price: float | None, surface: float | None) -> float | None:
     """Prix au m2 d'une mutation. None si prix ou surface manquant / non strictement
@@ -21,13 +23,6 @@ def price_per_m2(price: float | None, surface: float | None) -> float | None:
     if price is None or surface is None or price <= 0 or surface <= 0:
         return None
     return price / surface
-
-
-# Etats d'appariement porteurs d'une etiquette DPE certaine (spec §5, D3) : les deux
-# entrent dans la vue Impact DPE. `resolu_consensus` = identite du DPE inconnue mais
-# etiquette certaine par consensus -- se lit "ambigu sauve", pas "trouve degrade".
-# Source unique : 04_join.py (rapport) et 05_aggregate.py (resume) l'importent.
-IMPACT_DPE_STATUSES = ("trouve", "resolu_consensus")
 
 
 def impact_dpe_rows(rows: list[dict], post_reform_cutoff: str) -> list[dict]:

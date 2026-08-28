@@ -49,6 +49,13 @@ SURFACE_TOLERANCE_M2 = 2.0
 # au dimensionnement des cellules de la grille spatiale.
 _DEG_LAT_M = 111_320.0
 
+# Etats d'appariement porteurs d'une etiquette DPE certaine (spec §5, D3) : `trouve`
+# (identite du DPE connue) et `resolu_consensus` (identite inconnue, etiquette certaine
+# par consensus -- se lit "ambigu sauve", pas "trouve degrade"). Les deux entrent dans
+# la vue Impact DPE. Source unique : importee par join_dvf_dpe (rapport d'appariement),
+# aggregate (impact_dpe_rows), 05_aggregate et dashboard/data (resumes).
+IMPACT_DPE_STATUSES = ("trouve", "resolu_consensus")
+
 
 class MatchResult(NamedTuple):
     """Resultat d'appariement d'une mutation (spec §6).

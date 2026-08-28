@@ -72,8 +72,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline.lib.aggregate import IMPACT_DPE_STATUSES, aggregate_by, impact_dpe_rows  # noqa: E402
+from pipeline.lib.aggregate import aggregate_by, impact_dpe_rows  # noqa: E402
 from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF  # noqa: E402
+from pipeline.lib.match_dvf_dpe import IMPACT_DPE_STATUSES  # noqa: E402
 from pipeline.lib.mutations import (  # noqa: E402
     NATURES_RETENUES,
     PRIX_M2_MAX,

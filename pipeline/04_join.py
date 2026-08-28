@@ -28,20 +28,17 @@ vide, le script ne refait rien (supprimer le fichier pour forcer un re-run).
 from __future__ import annotations
 
 import sys
-from collections import Counter
 from pathlib import Path
 
 import duckdb
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline.lib.aggregate import IMPACT_DPE_STATUSES  # noqa: E402
 from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF  # noqa: E402
 from pipeline.lib.join_dvf_dpe import (  # noqa: E402
     DPE_FIELDS,
     OUTPUT_COLUMNS,
     PASSTHROUGH_DVF_FIELDS,
-    group_dpe_by_commune,
     match_all,
 )
 from pipeline.lib.match_distance import DISTANCE_THRESHOLD_M  # noqa: E402
@@ -93,55 +90,40 @@ def main() -> None:
     dpe_rows = read_parquet_rows(DPE_PATH, DPE_FIELDS)
     print(f"[04_join] {len(dvf_rows)} mutations DVF, {len(dpe_rows)} DPE post-reforme")
 
-    dpe_by_commune, dpe_sans_commune = group_dpe_by_commune(dpe_rows)
-
     print(f"[04_join] Dedup B + 4 passes (seuil distance passe 2 : {DISTANCE_THRESHOLD_M} m)")
-    out_rows, status_counts, dedup_removed = match_all(
-        dvf_rows, dpe_by_commune, DISTANCE_THRESHOLD_M
-    )
+    out_rows, report = match_all(dvf_rows, dpe_rows, DISTANCE_THRESHOLD_M)
 
     print(f"[04_join] Ecriture de {OUTPUT_PATH}")
     write_parquet_rows(out_rows, OUTPUT_COLUMNS, OUTPUT_PATH, str_columns=["date_mutation"])
 
-    total = len(out_rows)
-    trouve = status_counts.get("trouve", 0)
-    resolu_consensus = status_counts.get("resolu_consensus", 0)
-    non_trouve = status_counts.get("non_trouve", 0)
-    ambigu = status_counts.get("ambigu", 0)
-    methode_counts = Counter(
-        r["match_methode"] for r in out_rows if r["match_status"] in IMPACT_DPE_STATUSES
-    )
-    filtre_type_count = sum(1 for r in out_rows if r["filtre_type_applique"])
+    total = report.total
+    trouve = report.status_counts.get("trouve", 0)
+    resolu_consensus = report.status_counts.get("resolu_consensus", 0)
+    non_trouve = report.status_counts.get("non_trouve", 0)
+    ambigu = report.status_counts.get("ambigu", 0)
 
     def pct(n: int) -> str:
         return format_pct(n, total)
 
+    print("\n=== Rapport d'appariement DVF x DPE (T10 / #11 / #23, ADR 0003) ===")
+    print(f"  Mutations en entree            : {total}")
+    print(f"  DPE retires par la dedup (B)   : {report.dedup_removed}")
+    print(f"    - trouve            : {trouve:>6}  ({pct(trouve)})")
+    print(f"    - resolu_consensus  : {resolu_consensus:>6}  ({pct(resolu_consensus)})")
+    for methode, n in sorted(report.methode_counts.items(), key=lambda kv: -kv[1]):
+        print(f"        dont {methode:<24} : {n:>6}")
+    print(f"        dont filtre_type_applique : {report.filtre_type_count}")
     # Le DPE post-reforme n'existe qu'a partir de juillet 2021 : une paire sur une
     # mutation anterieure apparie un prix ancien a un DPE etabli bien plus tard sur
     # le meme bien (CONTEXT.md, "Vente appariee"). A garder visible, pas enterre --
     # la vue "Impact DPE" du dashboard porte l'avertissement (user story #34).
-    etiquette_certaine_pre_reforme = sum(
-        1
-        for r in out_rows
-        if r["match_status"] in IMPACT_DPE_STATUSES
-        and (r["date_mutation"] or "") < POST_REFORM_CUTOFF
-    )
-
-    print("\n=== Rapport d'appariement DVF x DPE (T10 / #11 / #23, ADR 0003) ===")
-    print(f"  Mutations en entree            : {total}")
-    print(f"  DPE retires par la dedup (B)   : {dedup_removed}")
-    print(f"    - trouve            : {trouve:>6}  ({pct(trouve)})")
-    print(f"    - resolu_consensus  : {resolu_consensus:>6}  ({pct(resolu_consensus)})")
-    for methode, n in sorted(methode_counts.items(), key=lambda kv: -kv[1]):
-        print(f"        dont {methode:<24} : {n:>6}")
-    print(f"        dont filtre_type_applique : {filtre_type_count}")
     print(
         f"        dont mutation < {POST_REFORM_CUTOFF} (DPE forcement posterieur au bien vendu)"
-        f" : {etiquette_certaine_pre_reforme}"
+        f" : {report.pre_reforme_count}"
     )
     print(f"    - non trouve        : {non_trouve:>6}  ({pct(non_trouve)})")
     print(f"    - ambigu            : {ambigu:>6}  ({pct(ambigu)})")
-    print(f"  DPE sans commune exploitable (hors candidats) : {dpe_sans_commune}")
+    print(f"  DPE sans commune exploitable (hors candidats) : {report.dpe_sans_commune}")
 
     if trouve == 0:
         print(

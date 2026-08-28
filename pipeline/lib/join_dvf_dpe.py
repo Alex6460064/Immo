@@ -1,23 +1,31 @@
 """Cablage pur de l'appariement DVF x DPE (T10 / #11, brique #23) -- aucune I/O.
 
-`pipeline/04_join.py` se limite a la lecture/ecriture Parquet et au rapport ;
-toute la logique testable vit ici et dans `pipeline/lib/match_dvf_dpe.py`
+`pipeline/04_join.py` se limite a la lecture/ecriture Parquet et a l'impression du
+rapport ; toute la logique testable vit ici et dans `pipeline/lib/match_dvf_dpe.py`
 (les 4 passes + dedup).
 
 - `group_dpe_by_commune` : scoping des candidats (un DPE n'est candidat que pour
   les mutations de sa commune, `code_insee_ban` == `code_insee` -- voir ADR 0003).
-- `match_all` : construit un `DpeIndex` par commune (grille spatiale, sinon la
-  passe 2 balaierait les >10 000 DPE de Bayonne/Anglet/Biarritz a chaque
-  mutation), interroge chaque mutation, emet une ligne de sortie par mutation et
-  compte les etats + les DPE retires par la dedup (brique B).
+  Reste public/teste mais appele par `match_all`, plus par le script.
+- `match_all(dvf_rows, dpe_rows, seuil) -> (out_rows, MatchReport)` : le `join`
+  complet. Scope les DPE par commune, construit un `DpeIndex` par commune (grille
+  spatiale, sinon la passe 2 balaierait les >10 000 DPE de Bayonne/Anglet/Biarritz
+  a chaque mutation), interroge chaque mutation, emet une ligne de sortie par
+  mutation et remplit un `MatchReport` avec tous les comptages du rapport.
 """
 
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from typing import NamedTuple
 
+from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF
 from pipeline.lib.dvf_schema import DVF_GEOCODED_COLUMNS
-from pipeline.lib.match_dvf_dpe import build_dpe_index, classify_match_indexed
+from pipeline.lib.match_dvf_dpe import (
+    IMPACT_DPE_STATUSES,
+    build_dpe_index,
+    classify_match_indexed,
+)
 
 # Champs de la mutation DVF recopies verbatim dans dvf_dpe_matched.parquet
 # (toutes les colonnes de dvf_geocoded.parquet -- schema partage, voir dvf_schema.py, #22).
@@ -72,18 +80,39 @@ def group_dpe_by_commune(dpe_rows: list[dict]) -> tuple[dict[str, list[dict]], i
     return groups, sans_commune
 
 
+class MatchReport(NamedTuple):
+    """Synthese d'un run d'appariement -- tous les comptages imprimes par
+    `pipeline/04_join.py`, calcules ici (le script ne fait qu'afficher).
+
+    Dicts ordinaires (pas `Counter`) : `MatchReport` est immuable et comparable
+    en test. `methode_counts` et `pre_reforme_count` ne portent que sur les
+    lignes a etiquette certaine (`status` dans `IMPACT_DPE_STATUSES`) ;
+    `filtre_type_count` porte sur toutes les mutations.
+    """
+
+    total: int
+    dedup_removed: int
+    status_counts: dict[str, int]
+    methode_counts: dict[str, int]
+    filtre_type_count: int
+    pre_reforme_count: int
+    dpe_sans_commune: int
+
+
 def match_all(
     dvf_rows: list[dict],
-    dpe_by_commune: dict[str, list[dict]],
+    dpe_rows: list[dict],
     seuil_distance_m: float,
-) -> tuple[list[dict], Counter, int]:
-    """Apparie chaque mutation. Retourne (lignes de sortie, compteur par statut,
-    nb de DPE retires par la dedup B).
+) -> tuple[list[dict], MatchReport]:
+    """`join` complet DVF x DPE. Retourne (lignes de sortie, `MatchReport`).
 
-    Le contexte bati (etiquette, GES, type, periode) est porte par `MatchResult`
-    -- plus de lookup `etiquette_by_numero` : sur `resolu_consensus` le
+    Scope les DPE par commune (`group_dpe_by_commune`), construit un `DpeIndex`
+    par commune, interroge chaque mutation. Le contexte bati (etiquette, GES,
+    type, periode) est porte par `MatchResult` -- sur `resolu_consensus` le
     `numero_dpe` est NULL mais l'etiquette est connue par consensus.
     """
+    dpe_by_commune, dpe_sans_commune = group_dpe_by_commune(dpe_rows)
+
     index_by_commune = {
         code: build_dpe_index(rows, seuil_distance_m) for code, rows in dpe_by_commune.items()
     }
@@ -95,10 +124,21 @@ def match_all(
 
     out_rows: list[dict] = []
     status_counts: Counter = Counter()
+    methode_counts: Counter = Counter()
+    filtre_type_count = 0
+    pre_reforme_count = 0
     for mutation in dvf_rows:
         code = (mutation.get("code_insee") or "").strip()
         result = classify_match_indexed(mutation, index_by_commune.get(code, empty_index))
         status_counts[result.status] += 1
+
+        certaine = result.status in IMPACT_DPE_STATUSES
+        if certaine and result.methode is not None:
+            methode_counts[result.methode] += 1
+        if result.filtre_type_applique:
+            filtre_type_count += 1
+        if certaine and (mutation.get("date_mutation") or "") < POST_REFORM_CUTOFF:
+            pre_reforme_count += 1
 
         row = {name: mutation.get(name) for name in PASSTHROUGH_DVF_FIELDS}
         row["match_status"] = result.status
@@ -111,4 +151,13 @@ def match_all(
         row["periode_construction"] = result.periode_construction
         out_rows.append(row)
 
-    return out_rows, status_counts, dedup_removed
+    report = MatchReport(
+        total=len(out_rows),
+        dedup_removed=dedup_removed,
+        status_counts=dict(status_counts),
+        methode_counts=dict(methode_counts),
+        filtre_type_count=filtre_type_count,
+        pre_reforme_count=pre_reforme_count,
+        dpe_sans_commune=dpe_sans_commune,
+    )
+    return out_rows, report
