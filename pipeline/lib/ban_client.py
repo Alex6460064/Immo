@@ -17,6 +17,9 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections import Counter
+from collections.abc import Callable
+from typing import NamedTuple
 from urllib.parse import urlencode
 
 from pipeline.lib.geocode_ban import GeocodeCache, geocode_address
@@ -76,3 +79,53 @@ def geocode_with_retry(client, address: str, cache: GeocodeCache) -> tuple[str, 
         file=sys.stderr,
     )
     return ("error", None)
+
+
+class GeocodeStats(NamedTuple):
+    """Comptages d'un passage de `geocode_rows`. Immuable et comparable en test
+    (comme MatchReport / ImpactDpeSlice). `no_address` : ligne sans adresse
+    exploitable, non tentee. Les trois autres viennent du statut de
+    `geocode_with_retry` : `error` (echec reseau persistant, non cache, a
+    re-tenter) est distinct de `not_found` (l'API a repondu, aucun resultat)."""
+
+    no_address: int
+    found: int
+    not_found: int
+    error: int
+
+
+def geocode_rows(
+    rows: list[dict],
+    address_of: Callable[[dict], str | None],
+    client,
+    cache: GeocodeCache,
+) -> GeocodeStats:
+    """Geocode en place chaque ligne de `rows` : ajoute les cles 'lat'/'lon'
+    (None si pas d'adresse ou echec). Retourne les comptages.
+
+    `address_of(row)` fournit la chaine d'adresse a soumettre a l'API BAN, ou
+    None / "" si la ligne n'a rien a geocoder -- c'est le seul point ou les
+    etapes DVF (02b, requete derivee de plusieurs colonnes) et DPE (03, colonne
+    `adresse_geocodage` precalculee) different.
+    """
+    no_address = 0
+    status_counts: Counter = Counter()
+    for row in rows:
+        query = address_of(row)
+        if not query:
+            row["lat"] = None
+            row["lon"] = None
+            no_address += 1
+            continue
+
+        status, coords = geocode_with_retry(client, query, cache)
+        status_counts[status] += 1
+        row["lat"] = coords["lat"] if coords else None
+        row["lon"] = coords["lon"] if coords else None
+
+    return GeocodeStats(
+        no_address=no_address,
+        found=status_counts["found"],
+        not_found=status_counts["not_found"],
+        error=status_counts["error"],
+    )

@@ -33,7 +33,7 @@ from pathlib import Path
 # sur sys.path (contrairement a pytest, ou pyproject.toml fixe pythonpath=["."]).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline.lib.ban_client import BanUrllibClient, geocode_with_retry  # noqa: E402
+from pipeline.lib.ban_client import BanUrllibClient, geocode_rows  # noqa: E402
 from pipeline.lib.clean_dvf import build_geocoding_query  # noqa: E402
 from pipeline.lib.dvf_schema import DVF_CLEAN_COLUMN_NAMES, DVF_GEOCODED_COLUMNS  # noqa: E402
 from pipeline.lib.geocode_ban import GeocodeCache  # noqa: E402
@@ -46,27 +46,6 @@ OUTPUT_PATH = Path(__file__).resolve().parent.parent / "data" / "processed" / "d
 GEOCODE_CACHE_PATH = (
     Path(__file__).resolve().parent.parent / "data" / "processed" / "ban_geocode_cache.jsonl"
 )
-
-
-def geocode_rows(rows: list[dict], client, cache: GeocodeCache) -> dict[str, int]:
-    """Geocode en place chaque ligne de `rows` (ajoute les cles 'lat'/'lon').
-
-    Retourne les compteurs {"no_address", "found", "not_found", "error"}.
-    """
-    stats = {"no_address": 0, "found": 0, "not_found": 0, "error": 0}
-    for row in rows:
-        query = build_geocoding_query(row)
-        if not query:
-            row["lat"] = None
-            row["lon"] = None
-            stats["no_address"] += 1
-            continue
-
-        status, coords = geocode_with_retry(client, query, cache)
-        stats[status] += 1
-        row["lat"] = coords["lat"] if coords else None
-        row["lon"] = coords["lon"] if coords else None
-    return stats
 
 
 def main() -> None:
@@ -90,28 +69,28 @@ def main() -> None:
     print(f"[geocode_ban] Geocodage via API BAN (cache partage DVF/DPE : {GEOCODE_CACHE_PATH})")
     client = BanUrllibClient()
     cache = GeocodeCache(GEOCODE_CACHE_PATH)
-    stats = geocode_rows(rows, client, cache)
+    stats = geocode_rows(rows, build_geocoding_query, client, cache)
 
     print(f"[geocode_ban] Ecriture de {OUTPUT_PATH}")
     write_parquet_rows(rows, DVF_GEOCODED_COLUMNS, OUTPUT_PATH, str_columns=["date_mutation"])
 
-    attempted = stats["found"] + stats["not_found"] + stats["error"]
-    success_rate = (stats["found"] / attempted * 100) if attempted else 0.0
-    success_rate_of_total = (stats["found"] / rows_in * 100) if rows_in else 0.0
+    attempted = stats.found + stats.not_found + stats.error
+    success_rate = (stats.found / attempted * 100) if attempted else 0.0
+    success_rate_of_total = (stats.found / rows_in * 100) if rows_in else 0.0
 
     print("\n=== Resume geocodage BAN DVF (T7 / #8) ===")
     print(f"  Mutations en entree : {rows_in}")
-    print(f"    - sans adresse exploitable (non tente) : {stats['no_address']}")
-    print(f"    - trouve                                : {stats['found']}")
-    print(f"    - non trouve (API BAN, aucun resultat)  : {stats['not_found']}")
-    print(f"    - erreur reseau persistante (a re-tenter au prochain run) : {stats['error']}")
+    print(f"    - sans adresse exploitable (non tente) : {stats.no_address}")
+    print(f"    - trouve                                : {stats.found}")
+    print(f"    - non trouve (API BAN, aucun resultat)  : {stats.not_found}")
+    print(f"    - erreur reseau persistante (a re-tenter au prochain run) : {stats.error}")
     print(
         f"    - taux de succes / tentatives ({attempted} adresses interrogees) : "
         f"{success_rate:.1f}%"
     )
     print(f"    - taux de succes / mutations totales : {success_rate_of_total:.1f}%")
 
-    if rows_in and stats["found"] == 0:
+    if rows_in and stats.found == 0:
         print(
             "ATTENTION : 0 mutation geocodee avec succes -- verifier la connectivite/le "
             "format des adresses.",

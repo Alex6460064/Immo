@@ -42,7 +42,7 @@ import duckdb
 # sur sys.path (contrairement a pytest, ou pyproject.toml fixe pythonpath=["."]).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pipeline.lib.ban_client import BanUrllibClient, geocode_with_retry  # noqa: E402
+from pipeline.lib.ban_client import BanUrllibClient, geocode_rows  # noqa: E402
 from pipeline.lib.clean_dpe import process_records  # noqa: E402
 from pipeline.lib.geocode_ban import GeocodeCache  # noqa: E402
 from pipeline.lib.parquet_io import write_parquet_rows  # noqa: E402
@@ -71,27 +71,6 @@ _CLEAN_COLUMNS = {
     "lat": "DOUBLE",
     "lon": "DOUBLE",
 }
-
-
-def geocode_clean_rows(clean_rows: list[dict], client, cache: GeocodeCache) -> dict[str, int]:
-    """Geocode en place chaque ligne de `clean_rows` (ajoute les cles 'lat'/'lon').
-
-    Retourne les compteurs {"no_address", "found", "not_found", "error"}.
-    """
-    stats = {"no_address": 0, "found": 0, "not_found": 0, "error": 0}
-    for row in clean_rows:
-        query = row["adresse_geocodage"]
-        if not query:
-            row["lat"] = None
-            row["lon"] = None
-            stats["no_address"] += 1
-            continue
-
-        status, coords = geocode_with_retry(client, query, cache)
-        stats[status] += 1
-        row["lat"] = coords["lat"] if coords else None
-        row["lon"] = coords["lon"] if coords else None
-    return stats
 
 
 def _output_columns_current(path: Path) -> bool:
@@ -142,14 +121,16 @@ def main() -> None:
     print(f"[clean_dpe] Geocodage via API BAN (cache : {GEOCODE_CACHE_PATH})")
     client = BanUrllibClient()
     cache = GeocodeCache(GEOCODE_CACHE_PATH)
-    geocode_stats = geocode_clean_rows(clean_rows, client, cache)
+    geocode_stats = geocode_rows(
+        clean_rows, lambda row: row.get("adresse_geocodage"), client, cache
+    )
 
     print(f"[clean_dpe] Ecriture de {OUTPUT_PATH}")
     write_parquet_rows(clean_rows, _CLEAN_COLUMNS, OUTPUT_PATH)
 
-    attempted = geocode_stats["found"] + geocode_stats["not_found"] + geocode_stats["error"]
-    success_rate = (geocode_stats["found"] / attempted * 100) if attempted else 0.0
-    success_rate_of_output = (geocode_stats["found"] / rows_out * 100) if rows_out else 0.0
+    attempted = geocode_stats.found + geocode_stats.not_found + geocode_stats.error
+    success_rate = (geocode_stats.found / attempted * 100) if attempted else 0.0
+    success_rate_of_output = (geocode_stats.found / rows_out * 100) if rows_out else 0.0
 
     print("\n=== Resume nettoyage DPE (T8 / #9) ===")
     print(f"  Lignes en entree (brut)      : {rows_in}")
@@ -159,12 +140,10 @@ def main() -> None:
     print(f"    - date manquante                  : {exclusions['missing_date']}")
     print(f"    - date invalide (format inattendu): {exclusions['invalid_date']}")
     print("  Geocodage (parmi les lignes retenues) :")
-    print(f"    - sans adresse exploitable (non tente) : {geocode_stats['no_address']}")
-    print(f"    - trouve                                : {geocode_stats['found']}")
-    print(f"    - non trouve (API BAN, aucun resultat)  : {geocode_stats['not_found']}")
-    print(
-        f"    - erreur reseau persistante (a re-tenter au prochain run) : {geocode_stats['error']}"
-    )
+    print(f"    - sans adresse exploitable (non tente) : {geocode_stats.no_address}")
+    print(f"    - trouve                                : {geocode_stats.found}")
+    print(f"    - non trouve (API BAN, aucun resultat)  : {geocode_stats.not_found}")
+    print(f"    - erreur reseau persistante (a re-tenter au prochain run) : {geocode_stats.error}")
     print(
         f"    - taux de succes / tentatives ({attempted} adresses interrogees) : "
         f"{success_rate:.1f}%"

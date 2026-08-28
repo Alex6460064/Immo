@@ -11,7 +11,8 @@ import urllib.error
 import pytest
 
 from pipeline.lib import ban_client
-from pipeline.lib.ban_client import geocode_with_retry
+from pipeline.lib.ban_client import GeocodeStats, geocode_rows, geocode_with_retry
+from pipeline.lib.clean_dvf import build_geocoding_query
 
 
 class _Cache(dict):
@@ -92,3 +93,92 @@ def test_json_decode_error_is_retried(monkeypatch):
     monkeypatch.setattr(ban_client, "geocode_address", bad_json)
     status, _ = geocode_with_retry(object(), "addr", _Cache())
     assert status == "error"
+
+
+class TestGeocodeRows:
+    """geocode_rows : boucle de geocodage partagee par 02b_geocode_ban et
+    03_clean_dpe -- geocode en place (ajoute row['lat']/row['lon']), agrege les
+    comptages dans un GeocodeStats. La seule difference entre les deux etapes,
+    d'ou vient la chaine d'adresse, est un adaptateur `address_of` injecte."""
+
+    def test_adresse_none_compte_no_address_sans_geocoder(self):
+        rows = [{"id": 1}]
+
+        def client_interdit(*_a, **_k):
+            raise AssertionError("le client ne doit pas etre appele sans adresse")
+
+        stats = geocode_rows(rows, lambda _r: None, client_interdit, _Cache())
+
+        assert stats == GeocodeStats(no_address=1, found=0, not_found=0, error=0)
+        assert rows[0]["lat"] is None
+        assert rows[0]["lon"] is None
+
+    def test_adresse_vide_compte_no_address(self):
+        rows = [{"id": 1}]
+        stats = geocode_rows(rows, lambda _r: "", object(), _Cache())
+        assert stats.no_address == 1
+
+    def test_trouve_ecrit_lat_lon_en_place(self):
+        cache = _Cache({"12 rue X": {"lat": 43.0, "lon": -1.0}})
+        rows = [{"adr": "12 rue X"}]
+
+        stats = geocode_rows(rows, lambda r: r["adr"], object(), cache)
+
+        assert stats == GeocodeStats(no_address=0, found=1, not_found=0, error=0)
+        assert rows[0]["lat"] == 43.0
+        assert rows[0]["lon"] == -1.0
+
+    def test_non_trouve_compte_not_found_et_lat_lon_none(self):
+        cache = _Cache({"nowhere": None})
+        rows = [{"adr": "nowhere"}]
+
+        stats = geocode_rows(rows, lambda r: r["adr"], object(), cache)
+
+        assert stats == GeocodeStats(no_address=0, found=0, not_found=1, error=0)
+        assert rows[0]["lat"] is None
+        assert rows[0]["lon"] is None
+
+    def test_erreur_reseau_persistante_compte_error(self, monkeypatch):
+        def always_fails(*_a):
+            raise TimeoutError("down")
+
+        monkeypatch.setattr(ban_client, "geocode_address", always_fails)
+        rows = [{"adr": "12 rue X"}]
+
+        stats = geocode_rows(rows, lambda r: r["adr"], object(), _Cache())
+
+        assert stats == GeocodeStats(no_address=0, found=0, not_found=0, error=1)
+        assert rows[0]["lat"] is None
+
+    def test_batch_mixte_agrege_les_comptages(self):
+        cache = _Cache({"found": {"lat": 1.0, "lon": 2.0}, "missing": None})
+        rows = [{"adr": "found"}, {"adr": "missing"}, {"adr": None}, {"adr": "found"}]
+
+        stats = geocode_rows(rows, lambda r: r["adr"], object(), cache)
+
+        assert stats == GeocodeStats(no_address=1, found=2, not_found=1, error=0)
+
+    def test_adaptateur_dvf_build_geocoding_query(self):
+        """Forme 02b : l'adresse est derivee de plusieurs colonnes DVF."""
+        row = {"adresse_brute": "12 rue X", "code_postal": "64100", "commune": "Bayonne"}
+        query = build_geocoding_query(row)
+        cache = _Cache({query: {"lat": 1.0, "lon": 2.0}})
+
+        stats = geocode_rows([dict(row)], build_geocoding_query, object(), cache)
+
+        assert stats.found == 1
+
+    def test_adaptateur_dpe_lit_la_colonne_precalculee(self):
+        """Forme 03 : l'adresse est deja dans row['adresse_geocodage']."""
+        cache = _Cache({"12 rue X 64100 Bayonne": {"lat": 1.0, "lon": 2.0}})
+        rows = [{"adresse_geocodage": "12 rue X 64100 Bayonne"}]
+
+        stats = geocode_rows(rows, lambda r: r.get("adresse_geocodage"), object(), cache)
+
+        assert stats.found == 1
+        assert rows[0]["lat"] == 1.0
+
+    def test_adaptateur_dpe_clef_absente_compte_no_address(self):
+        rows = [{"autre": "x"}]
+        stats = geocode_rows(rows, lambda r: r.get("adresse_geocodage"), object(), _Cache())
+        assert stats.no_address == 1
