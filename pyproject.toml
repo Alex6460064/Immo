@@ -16,10 +16,13 @@ dev = [
     "ruff>=0.16.4",
 ]
 # Genere la synthese PDF (pipeline/07_report.py) uniquement -- hors chemin de
-# deploiement (dashboard Cloud) et hors CI (aucun test n'importe 07_report ni
-# matplotlib). Groupe non-defaut : `uv sync --group report` pour l'installer.
+# deploiement (dashboard Cloud) et hors CI (aucun test n'importe 07_report).
+# Groupe non-defaut : `uv sync --group report` pour l'installer.
+# typst : moteur de mise en page + graphes (lilaq). Le paquet pip embarque le
+# binaire et les polices -> pas d'install systeme. Version epinglee = PDF
+# reproductible bit a bit (le producer PDF porte la version typst).
 report = [
-    "matplotlib>=3.9",
+    "typst>=0.15,<0.16",
 ]
 
 [tool.ruff]

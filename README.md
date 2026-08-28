@@ -15,13 +15,14 @@ limites méthodologiques (taux d'appariement, biais temporel), jamais masquées.
 ## Stack
 
 Python + [uv](https://docs.astral.sh/uv/) · DuckDB · Parquet · Streamlit + Plotly ·
-matplotlib (synthèse PDF, groupe `report`) · pytest + ruff (CI GitHub Actions).
+[Typst](https://typst.app/) + [lilaq](https://typst.app/universe/package/lilaq) (synthèse PDF,
+groupe `report`) · pytest + ruff (CI GitHub Actions).
 
 ## Installation
 
 ```bash
 uv sync                     # pipeline + dashboard
-uv sync --group report      # + matplotlib, pour régénérer la synthèse PDF (étape 07)
+uv sync --group report      # + typst (binaire embarqué), pour régénérer la synthèse PDF (étape 07)
 ```
 
 ## Pipeline
@@ -81,7 +82,9 @@ variations sur ~10 ans, 5 ans et 1 an ; prix/m² moyen par étiquette DPE et par
 la réforme, suivi d'une lecture critique du biais de localisation (les passoires F/G,
 concentrées dans l'ancien cher du centre et du front de mer, ne laissent apparaître aucune
 décote DPE lisible sur donnée brute). Régénéré par `pipeline/07_report.py` à partir de
-l'instantané `data/dashboard/`.
+l'instantané `data/dashboard/` : le script calcule les chiffres, `pipeline/report/template.typ`
+les met en page (Typst, graphes `lilaq`). PDF reproductible bit-à-bit (polices embarquées,
+versions épinglées) ; le premier rendu télécharge `lilaq` puis le met en cache.
 
 ## Tests
 
