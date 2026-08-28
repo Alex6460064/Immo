@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Miroir des steps lint de la CI (.github/workflows/ci.yml) : bloque un commit
+# qui ferait echouer `ruff check` ou `ruff format --check`.
+# Active via : git config core.hooksPath .githooks
+set -e
+
+echo "pre-commit: ruff check + ruff format --check"
+uv run ruff check .
+uv run ruff format --check .

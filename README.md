@@ -145,6 +145,7 @@ Gestion des dépendances avec [uv](https://docs.astral.sh/uv/).
 ```bash
 uv sync                     # pipeline + dashboard
 uv sync --group report      # + Typst, pour régénérer la synthèse PDF (étape 07)
+git config core.hooksPath .githooks   # active le hook pre-commit (ruff, miroir CI)
 ```
 
 ## Pipeline
@@ -203,7 +204,9 @@ uv run ruff check .
 
 TDD sur toute la logique pure (`pipeline/lib/`) : normalisation d'adresse, distance géocodée,
 départage par surface, agrégats, rendu du rapport. Tests d'intégration sur échantillon fixe par
-étape. CI GitHub Actions (ruff + pytest) à chaque push.
+étape. CI GitHub Actions (ruff + pytest) à chaque push. Un hook `pre-commit` versionné
+(`.githooks/`, activé via `git config core.hooksPath .githooks`) rejoue `ruff check` +
+`ruff format --check` avant chaque commit.
 
 ## Limites connues
 

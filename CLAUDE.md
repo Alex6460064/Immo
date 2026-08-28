@@ -75,6 +75,8 @@ Ordre de priorité (non négociable) :
 - **Typst + lilaq** — mise en page et graphes de la synthèse PDF (`pipeline/07_report.py`,
   groupe de dépendances `report` ; binaire Typst embarqué).
 - **pytest + ruff** — tests (TDD) et lint, exécutés en **CI GitHub Actions** à chaque push.
+  Hook `pre-commit` versionné (`.githooks/`, activé par `git config core.hooksPath .githooks`)
+  rejoue `ruff check` + `ruff format --check` en local avant chaque commit — miroir de la CI.
 - Pas de Pull Request (projet solo) : revue de code locale à la fin de chaque ticket.
 
 ---
