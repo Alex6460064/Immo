@@ -6,7 +6,8 @@ Deux vues :
   - "Marche" (#14) : courbe de reference "toutes communes" (prix/m2 par annee,
     re-agregee depuis les mutations) + une courbe par commune cochee ; toggle
     "Statistique" moyenne / mediane qui pilote la courbe ET la carte choroplethe
-    IRIS. Defaut : moyenne.
+    IRIS (defaut moyenne). Type de bien "Tous" -> une courbe par type (maison /
+    appartement jamais fusionnes) ; la carte exige alors un type precis.
   - "Impact DPE" (#15) : prix/m2 par regroupement d'etiquette DPE (A-C / D / E /
     F-G) pour UNE commune (obligatoire -- comparer entre communes n'est pas
     pertinent), sur le sous-ensemble apparie post-reforme, avec le taux
@@ -41,6 +42,21 @@ TOUS_GROUPES = "Tous"
 # Carte : centre de repli si le recadrage sur la selection echoue.
 _MAP_CENTER = {"lat": 43.44, "lon": -1.52}
 _GROUP_COLORS = {"A-C": "#1a9850", "D": "#f9d057", "E": "#fc8d59", "F-G": "#d73027"}
+
+# Vue Marché, type de bien = "Tous" : couleur = commune, style de trait = type.
+_TYPE_DASH = {"Maison": "solid", "Appartement": "dot"}
+_PALETTE = (
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#7f7f7f",
+    "#bcbd22",
+    "#17becf",
+)
 
 _HOVER = "%{x} · %{y:,.0f} €/m² · n=%{customdata}<extra></extra>"
 _HOVER_NAMED = "%{x} · %{y:,.0f} €/m² · n=%{customdata}<extra>%{fullData.name}</extra>"
@@ -121,11 +137,13 @@ def _sidebar(annees: list[str]) -> Filters:
 
     if vue == "Marché":
         # Courbe de référence = toutes communes ; les communes cochées se
-        # superposent. Une stat (moyenne / médiane) n'a de sens que sur une
-        # population homogène -> un type de bien est obligatoire (pas de "Tous").
+        # superposent. "Tous" = une courbe PAR type (maison / appartement restent
+        # séparés -- une stat les mélangeant n'aurait pas de sens) ; la carte IRIS
+        # exige alors un type précis.
         stat_sel = st.sidebar.radio("Statistique", ["Moyenne", "Médiane"], horizontal=True)
         stat = "moyenne" if stat_sel == "Moyenne" else "mediane"
-        type_local = st.sidebar.selectbox("Type de bien", list(data.TYPES_BIEN))
+        type_sel = st.sidebar.selectbox("Type de bien", [TOUS_TYPES, *data.TYPES_BIEN])
+        type_local = None if type_sel == TOUS_TYPES else type_sel
         sel = st.sidebar.multiselect("Communes à comparer", noms)
         communes_compare = tuple(c["dvf_nom"] for c in choices if c["nom"] in sel)
         # Selectbox distinct : pilote uniquement la carte IRIS (comportement
@@ -176,48 +194,61 @@ def _vue_marche(f: Filters) -> None:
 
     rows = _agg_marche()
 
-    # Courbe de référence : toutes communes confondues, ré-agrégée depuis les
-    # mutations (moyenne / médiane d'ensemble, pas une moyenne de moyennes).
-    glob = data.market_trend_global(
-        _matched(),
-        type_local=f.type_local,
-        annee_min=f.annee_min,
-        annee_max=f.annee_max,
-    )
+    # "Tous" (f.type_local is None) -> une courbe par type ; sinon une seule.
+    # Maison / appartement ne sont jamais fusionnés dans une même série.
+    types = list(data.TYPES_BIEN) if f.type_local is None else [f.type_local]
+    multi = len(types) > 1
+
+    def _label(base: str, typ: str) -> str:
+        return f"{base} · {typ}" if multi else base
 
     fig = go.Figure()
-    if glob:
-        fig.add_trace(
-            go.Scatter(
-                x=[r["annee"] for r in glob],
-                y=[r[f.stat] for r in glob],
-                mode="lines+markers",
-                name="Toutes communes",
-                line={"color": "#111111", "width": 3},
-                customdata=[r["n"] for r in glob],
-                hovertemplate=_HOVER_NAMED,
+    total_n = 0
+    for typ in types:
+        dash = _TYPE_DASH[typ] if multi else "solid"
+
+        # Courbe de référence : toutes communes confondues, ré-agrégée depuis les
+        # mutations (moyenne / médiane d'ensemble, pas une moyenne de moyennes).
+        glob = data.market_trend_global(
+            _matched(), type_local=typ, annee_min=f.annee_min, annee_max=f.annee_max
+        )
+        total_n += sum(r["n"] for r in glob)
+        if glob:
+            fig.add_trace(
+                go.Scatter(
+                    x=[r["annee"] for r in glob],
+                    y=[r[f.stat] for r in glob],
+                    mode="lines+markers",
+                    name=_label("Toutes communes", typ),
+                    legendgroup="Toutes communes",
+                    line={"color": "#111111", "width": 3, "dash": dash},
+                    customdata=[r["n"] for r in glob],
+                    hovertemplate=_HOVER_NAMED,
+                )
             )
-        )
-    for com in f.communes_compare:
-        serie = data.market_trend(
-            rows,
-            commune=com,
-            type_local=f.type_local,
-            annee_min=f.annee_min,
-            annee_max=f.annee_max,
-        )
-        if not serie:
-            continue
-        fig.add_trace(
-            go.Scatter(
-                x=[r["annee"] for r in serie],
-                y=[r[f.stat] for r in serie],
-                mode="lines+markers",
-                name=com.title(),
-                customdata=[r["n"] for r in serie],
-                hovertemplate=_HOVER_NAMED,
+
+        for i, com in enumerate(f.communes_compare):
+            serie = data.market_trend(
+                rows,
+                commune=com,
+                type_local=typ,
+                annee_min=f.annee_min,
+                annee_max=f.annee_max,
             )
-        )
+            if not serie:
+                continue
+            fig.add_trace(
+                go.Scatter(
+                    x=[r["annee"] for r in serie],
+                    y=[r[f.stat] for r in serie],
+                    mode="lines+markers",
+                    name=_label(com.title(), typ),
+                    legendgroup=com.title(),
+                    line={"color": _PALETTE[i % len(_PALETTE)], "dash": dash},
+                    customdata=[r["n"] for r in serie],
+                    hovertemplate=_HOVER_NAMED,
+                )
+            )
     fig.update_layout(
         yaxis_title=f"{stat_label} €/m²",
         xaxis_title="Année de mutation",
@@ -225,13 +256,16 @@ def _vue_marche(f: Filters) -> None:
         height=430,
         margin={"t": 30, "r": 10, "l": 10, "b": 10},
     )
-    st.metric("Mutations toutes communes (période)", _n(sum(r["n"] for r in glob)))
-    if glob:
+    st.metric("Mutations toutes communes (période)", _n(total_n))
+    if total_n:
         st.plotly_chart(fig, width="stretch")
     else:
         st.info("Aucune mutation pour cette sélection.")
 
     st.subheader(f"Carte — prix {f.stat}/m² par IRIS")
+    if f.type_local is None:
+        st.info("Carte : choisir un type de bien précis (maison ou appartement).")
+        return
     st.caption(
         f"{stat_label} cumulée toutes années, pour le type de bien sélectionné "
         "(ADR 0004). Les communes à IRIS unique (zone = commune entière) "

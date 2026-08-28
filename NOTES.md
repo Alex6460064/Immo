@@ -13,6 +13,13 @@ ré-agrégée depuis les mutations (`market_trend_global` → `mutation_price_po
 `st.multiselect` « Communes à comparer » superpose une courbe par commune cochée. Évite le fouillis
 des 16 courbes par défaut. Le `selectbox` « Carte — commune » (inchangé) ne pilote plus que la carte IRIS.
 
+**Type de bien « Tous »** (comme la vue Impact DPE) : une courbe **par type**, jamais une série
+fusionnant maison + appartement (populations distinctes, stat mélangée = non-sens — principe conservé,
+`mutation_price_points` n'émet d'ailleurs de point que pour les mutations mono-type habitation).
+Encodage : couleur = commune, trait = type (plein maison / pointillé appartement). La carte IRIS ne
+peut porter qu'une valeur par zone → sous « Tous » elle affiche un message « choisir un type précis »,
+pas de fusion silencieuse.
+
 **Statistique : moyenne par défaut** (toggle `Moyenne` / `Médiane` dans la sidebar), pilote la courbe
 **et** la carte. Revirement assumé vs le choix initial « médiane = stat de référence » (ADR 0004) :
 demande explicite pour la lisibilité « prix moyen au m² ». Le prix/m² étant déjà calculé par mutation

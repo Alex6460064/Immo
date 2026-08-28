@@ -58,8 +58,8 @@ Deux vues :
   carte choroplèthe du prix/m² par zone IRIS. Un toggle **Moyenne / Médiane** (moyenne par
   défaut) pilote la courbe **et** la carte. Le prix/m² est calculé **par mutation** (prix ÷
   surface habitation totale), pas par lot — sinon une vente d'immeuble en bloc fausserait
-  toute une zone (ADR 0006). Filtres : période, type de bien (maison **ou** appartement —
-  une stat mélangeant les deux n'aurait pas de sens).
+  toute une zone (ADR 0006). Filtres : période, type de bien — maison, appartement, ou
+  **Tous** (une courbe par type, jamais fusionnées ; la carte demande alors un type précis).
 - **Impact DPE** — prix/m² par regroupement d'étiquette DPE (A-C / D / E / F-G) pour **une
   commune** (obligatoire : comparer un bien F à Biarritz front de mer à un bien A à Hasparren
   n'a pas de sens), sur le sous-ensemble apparié **post-réforme** (mutations ≥ juillet 2021),
