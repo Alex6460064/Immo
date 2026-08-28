@@ -1,10 +1,10 @@
 """Tests for pipeline.lib.match_dvf_dpe -- pure 3-pass DVF x DPE matching logic
 (ADR 0003), no I/O, no network.
 
-Written before the implementation (TDD, per CLAUDE.md). Seam: the 3-pass matcher --
-`match_mutation` (bare status, issue #11 signature) and the richer `classify_match`
-(reference impl). pipeline/04_join.py calls the grid-indexed `classify_match_indexed`
-for speed; a differential test here locks it to `classify_match`.
+Written before the implementation (TDD, per CLAUDE.md). Seam: the 3-pass matcher
+`classify_match` (reference impl, returns a full `MatchResult`). pipeline/04_join.py
+calls the grid-indexed `classify_match_indexed` for speed; a differential test here
+locks it to `classify_match`.
 
 Vocabulary (CONTEXT.md): a mutation ends in exactly one of trouve / non_trouve /
 ambigu, never a forced random match.
@@ -18,7 +18,6 @@ from pipeline.lib.match_dvf_dpe import (
     classify_match,
     classify_match_indexed,
     dedup_dpe,
-    match_mutation,
 )
 
 # A DPE candidate geocoded ~8 m from the reference point below (within the 15 m
@@ -68,9 +67,6 @@ class TestNoCandidates:
         result = classify_match(_mutation("10 RUE DU MOULIN"), [], 15)
         assert result.status == "non_trouve"
         assert result.numero_dpe is None
-
-    def test_match_mutation_returns_bare_status_string(self):
-        assert match_mutation(_mutation("10 RUE DU MOULIN"), [], 15) == "non_trouve"
 
 
 class TestDedupDpe:
@@ -478,7 +474,7 @@ class TestEveryMutationEndsInExactlyOneState:
         ],
     )
     def test_status_always_in_the_four_state_vocabulary(self, mutation, candidates):
-        assert match_mutation(mutation, candidates, 15) in self._VOCAB
+        assert classify_match(mutation, candidates, 15).status in self._VOCAB
 
     def test_consensus_case_reaches_resolu_consensus(self):
         # Two distinct logements (surfaces 50 / 51, both within +/-2 of the mutation),
@@ -487,7 +483,7 @@ class TestEveryMutationEndsInExactlyOneState:
             _dpe("D1", "10 RUE A", surface=50.0, etiquette="D"),
             _dpe("D2", "10 RUE A", surface=51.0, etiquette="D"),
         ]
-        status = match_mutation(_mutation("10 RUE A", surface=50.0), candidates, 15)
+        status = classify_match(_mutation("10 RUE A", surface=50.0), candidates, 15).status
         assert status == "resolu_consensus"
 
 

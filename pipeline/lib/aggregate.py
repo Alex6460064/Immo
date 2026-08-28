@@ -1,8 +1,10 @@
-"""Agregats pour les 3 tables du dashboard (issue #13) -- logique pure, aucune I/O.
+"""Groupement generique pour les tables du dashboard (issue #13) -- logique pure,
+aucune I/O.
 
-`pipeline/05_aggregate.py` lit les parquets d'appariement (04_join) et de
-rattachement IRIS (04b_join_iris), calcule le prix/m2 de chaque mutation via
-`price_per_m2`, puis groupe via `aggregate_by`.
+`aggregate_by` groupe des lignes deja porteuses d'une valeur numerique (le prix/m2
+est calcule en amont par `pipeline/lib/mutations.py` depuis #26) et emet
+moyenne / mediane / effectif `n` par groupe. Appele par `pipeline/05_aggregate.py`
+et `dashboard/data.py`.
 
 Regle CLAUDE.md / user story #29 : aucune moyenne n'est produite sans son
 effectif `n` -- `aggregate_by` porte toujours `n` sur chaque ligne.
@@ -12,15 +14,6 @@ from __future__ import annotations
 
 import statistics
 from collections import defaultdict
-
-
-def price_per_m2(price: float | None, surface: float | None) -> float | None:
-    """Prix au m2 d'une mutation. None si prix ou surface manquant / non strictement
-    positif -- ces lignes sont exclues des agregats (documentees en amont par
-    02_clean_dvf, ce garde-fou est une defense en profondeur)."""
-    if price is None or surface is None or price <= 0 or surface <= 0:
-        return None
-    return price / surface
 
 
 def _sort_key(values: tuple) -> tuple:

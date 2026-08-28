@@ -158,8 +158,8 @@ par #15, ni le **regroupement A-C / D / E / F-G** que le ticket décrit
 explicitement (« prix/m² par étiquette DPE (A-C/D/E/F-G) »). Une médiane par
 regroupement ne se recompose pas à partir des médianes par lettre.
 `dashboard/data.py:impact_dpe_aggregate()` applique les filtres sur les lignes
-brutes puis réutilise **les mêmes fonctions pures** que
-`pipeline/05_aggregate.py` (`impact_dpe_rows` → `price_per_m2` → `aggregate_by`),
+brutes puis réutilise **la même chaîne pure** que `pipeline/05_aggregate.py`
+(`pipeline/lib/impact_dpe.py:impact_dpe_slice`, unifiée en #28),
 en groupant par `dpe_group(etiquette)` × type de bien. Sans filtre
 commune/période, **les mêmes mutations** sont agrégées que dans `agg_dpe.parquet`
 (mêmes effectifs totaux) — seule la maille de groupe diffère. `agg_dpe.parquet`

@@ -1,10 +1,9 @@
 """Tests for pipeline.lib.aggregate -- pure aggregation logic for the dashboard
 tables (issue #13), no I/O.
 
-Written before the implementation (TDD, per CLAUDE.md). Seams: `price_per_m2`
-(one mutation's price / m2) and `aggregate_by` (group rows, emit moyenne / mediane
-/ n per group). CLAUDE.md / user story #29: no average is emitted without its
-observation count `n`.
+Written before the implementation (TDD, per CLAUDE.md). Seam: `aggregate_by`
+(group rows, emit moyenne / mediane / n per group). CLAUDE.md / user story #29:
+no average is emitted without its observation count `n`.
 
 `impact_dpe_rows` a demenage vers `pipeline/lib/impact_dpe.py` (issue #28) --
 ses tests sont dans `tests/lib/test_impact_dpe.py`.
@@ -12,25 +11,7 @@ ses tests sont dans `tests/lib/test_impact_dpe.py`.
 
 import pytest
 
-from pipeline.lib.aggregate import aggregate_by, price_per_m2
-
-
-class TestPricePerM2:
-    def test_plain_division(self):
-        assert price_per_m2(300_000, 60) == 5000.0
-
-    def test_zero_surface_is_none(self):
-        assert price_per_m2(300_000, 0) is None
-
-    def test_missing_price_is_none(self):
-        assert price_per_m2(None, 60) is None
-
-    def test_missing_surface_is_none(self):
-        assert price_per_m2(300_000, None) is None
-
-    def test_non_positive_price_is_none(self):
-        assert price_per_m2(0, 60) is None
-        assert price_per_m2(-10, 60) is None
+from pipeline.lib.aggregate import aggregate_by
 
 
 class TestAggregateBy:

@@ -43,7 +43,6 @@ from pipeline.lib.join_dvf_dpe import (  # noqa: E402
 )
 from pipeline.lib.match_distance import DISTANCE_THRESHOLD_M  # noqa: E402
 from pipeline.lib.parquet_io import read_parquet_rows, write_parquet_rows  # noqa: E402
-from pipeline.lib.reporting import format_pct  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DVF_PATH = ROOT / "data" / "processed" / "dvf_geocoded.parquet"
@@ -103,7 +102,7 @@ def main() -> None:
     ambigu = report.status_counts.get("ambigu", 0)
 
     def pct(n: int) -> str:
-        return format_pct(n, total)
+        return f"{n / total * 100:.1f}%" if total else "-"
 
     print("\n=== Rapport d'appariement DVF x DPE (T10 / #11 / #23, ADR 0003) ===")
     print(f"  Mutations en entree            : {total}")

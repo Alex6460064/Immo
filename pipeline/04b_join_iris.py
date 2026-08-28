@@ -44,7 +44,6 @@ from pipeline.lib.join_iris import (  # noqa: E402
     iris_features_from_geojson,
 )
 from pipeline.lib.parquet_io import read_parquet_rows, write_parquet_rows  # noqa: E402
-from pipeline.lib.reporting import format_pct  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DVF_PATH = ROOT / "data" / "processed" / "dvf_geocoded.parquet"
@@ -170,7 +169,7 @@ def main() -> None:
     hors = counts.get("hors_perimetre_iris", 0)
 
     def pct(n: int) -> str:
-        return format_pct(n, total)
+        return f"{n / total * 100:.1f}%" if total else "-"
 
     print("\n=== Rapport rattachement IRIS (T11 / #12, ADR 0004) ===")
     print(f"  Mutations en entree                        : {total}")

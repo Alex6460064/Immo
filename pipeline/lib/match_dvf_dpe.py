@@ -375,11 +375,3 @@ def classify_match_indexed(mutation: dict, index: DpeIndex) -> MatchResult:
         near = _within_distance(lat, lon, bucket, index.seuil_distance_m)
 
     return _resolve(mutation, list(exact), near)
-
-
-def match_mutation(mutation: dict, dpe_candidats: list[dict], seuil_distance_m: float) -> str:
-    """Etat d'appariement d'une mutation : "trouve" | "non_trouve" | "ambigu".
-
-    Signature des criteres d'acceptation de l'issue #11. Enveloppe fine sur
-    `classify_match` quand seul l'etat compte (rapport, comptages)."""
-    return classify_match(mutation, dpe_candidats, seuil_distance_m).status
