@@ -6,6 +6,30 @@ arbitrages plus fins, avec leur date et leur justification.
 
 ---
 
+## 2026-08-28 — Refonte UI dashboard : vue Marché (courbe de référence + toggle stat), vue Impact DPE (commune obligatoire)
+
+**Vue Marché.** Par défaut, une seule courbe : prix/m² **toutes communes confondues** par année,
+ré-agrégée depuis les mutations (`market_trend_global` → `mutation_price_points` → `aggregate_by(["annee"])`).
+`st.multiselect` « Communes à comparer » superpose une courbe par commune cochée. Évite le fouillis
+des 16 courbes par défaut. Le `selectbox` « Carte — commune » (inchangé) ne pilote plus que la carte IRIS.
+
+**Statistique : moyenne par défaut** (toggle `Moyenne` / `Médiane` dans la sidebar), pilote la courbe
+**et** la carte. Revirement assumé vs le choix initial « médiane = stat de référence » (ADR 0004) :
+demande explicite pour la lisibilité « prix moyen au m² ». Le prix/m² étant déjà calculé par mutation
+et borné [200, 30 000] en amont (#26), la moyenne d'ensemble n'est plus polluée par les ventes en bloc ;
+`agg_marche` / `agg_iris` portaient déjà les deux colonnes, aucun re-run pipeline. Médiane reste
+disponible d'un clic. Non-régression (jeu courant, Maison) : courbe globale 2016 → 2025 de
+~3 250 à ~5 000 €/m² médiane (moyenne ~3 550 → ~5 600) ; n global = 10 320 = Σ agg_marche Maison.
+
+**Vue Impact DPE : commune obligatoire** (défaut Anglet), plus d'option « Toutes ». Mélanger les
+communes n'est pas comparable : un bien F à Biarritz front de mer reste plus cher qu'un bien A à
+Hasparren. Regroupement A-C / D / E / F-G conservé : par commune, A/B et G sont trop rares pour une
+barre isolée (ex. Guéthary A=1, Arcangues G=0, Bassussarry F=G=0) ; A-C = « performant », F-G =
+passoires thermiques (catégorie réglementaire), D et E séparés car gros volume. Anglet (contrôle) :
+8 barres, n de 25 (F-G Appartement) à 832 (A-C Appartement).
+
+---
+
 ## 2026-08-28 — Repli mutation pour le prix/m² (issue #26, ADR 0006)
 
 Carte dashboard : IRIS « Sud » de Tarnos à **82 339 €/m²** médiane appartement. Cause :

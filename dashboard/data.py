@@ -231,6 +231,33 @@ def market_trend(
     return sorted(out, key=lambda r: r.get("annee") or "")
 
 
+def market_trend_global(
+    matched_rows: Sequence[dict],
+    *,
+    type_local: str | None = None,
+    annee_min: str | None = None,
+    annee_max: str | None = None,
+) -> list[dict]:
+    """Courbe de reference « toutes communes confondues » de la vue « Marche » :
+    prix/m2 `moyenne` ET `mediane` par annee, re-agrege depuis les lignes brutes
+    d'appariement (`dvf_dpe_matched`, toutes les mutations quel que soit
+    `match_status`).
+
+    MÊME chaine pure que `pipeline/05_aggregate.py` (`mutation_price_points` ->
+    `aggregate_by`), groupee par annee seule : une moyenne / mediane d'ensemble,
+    pas une moyenne de moyennes par commune (biaisee par les petites communes).
+    L'UI choisit la stat affichee via le toggle de la sidebar. Trie par annee.
+    """
+    points, _ = mutation_price_points(list(matched_rows))
+    kept = [
+        p
+        for p in points
+        if (type_local is None or p.get("type_local") == type_local)
+        and _in_range(p.get("annee"), annee_min, annee_max)
+    ]
+    return sorted(aggregate_by(kept, ["annee"]), key=lambda r: r.get("annee") or "")
+
+
 def filter_iris(
     rows: Sequence[dict],
     *,
@@ -252,17 +279,19 @@ def iris_map_values(
     rows: Sequence[dict],
     *,
     type_local: str,
+    stat: str = "mediane",
     code_commune: str | None = None,
 ) -> list[dict]:
-    """Une ligne `agg_iris` par IRIS pour la carte choroplethe : prix **median**/m2
-    du type de bien selectionne.
+    """Une ligne `agg_iris` par IRIS pour la carte choroplethe : prix/m2 du type de
+    bien selectionne, dans la statistique choisie par l'UI (`stat` vaut
+    `"moyenne"` ou `"mediane"`, pilote par le toggle de la sidebar de la vue
+    « Marche »).
 
-    Mediane et non moyenne : la mediane est la stat de reference du projet
-    (NOTES.md) -- ceci precise la formulation « prix moyen/m2 » d'ADR 0004. Le
-    prix/m2 est deja calcule par mutation et borne en amont (#26), la mediane
-    reste preferee pour sa robustesse a la queue haute des prix immobiliers. La
-    vue Marche impose toujours un `type_local`, donc un IRIS = une ligne (pas de
-    recombinaison entre types). Trie par `code_iris`.
+    Le prix/m2 est deja calcule par mutation et borne [200, 30 000] en amont (#26,
+    ADR 0006) : la moyenne d'IRIS n'est plus exposee a des valeurs aberrantes. La
+    mediane reste le defaut du projet (NOTES.md) pour sa robustesse a la queue
+    haute des prix. La vue « Marche » impose toujours un `type_local`, donc un
+    IRIS = une ligne. Trie par `code_iris` ; cle de valeur : `valeur`.
     """
     kept = filter_iris(rows, code_commune=code_commune, type_local=type_local)
     return sorted(
@@ -270,11 +299,11 @@ def iris_map_values(
             {
                 "code_iris": r["code_iris"],
                 "nom_iris": r.get("nom_iris"),
-                "mediane": r["mediane"],
+                "valeur": r[stat],
                 "n": int(r.get("n") or 0),
             }
             for r in kept
-            if r.get("code_iris") is not None and r.get("mediane") is not None
+            if r.get("code_iris") is not None and r.get(stat) is not None
         ),
         key=lambda r: r["code_iris"],
     )

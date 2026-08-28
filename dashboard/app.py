@@ -3,11 +3,14 @@
     streamlit run dashboard/app.py
 
 Deux vues :
-  - "Marche" (#14) : tendance prix/m2 median par commune / annee + carte
-    choroplethe prix moyen/m2 par IRIS.
+  - "Marche" (#14) : courbe de reference "toutes communes" (prix/m2 par annee,
+    re-agregee depuis les mutations) + une courbe par commune cochee ; toggle
+    "Statistique" moyenne / mediane qui pilote la courbe ET la carte choroplethe
+    IRIS. Defaut : moyenne.
   - "Impact DPE" (#15) : prix/m2 par regroupement d'etiquette DPE (A-C / D / E /
-    F-G) sur le sous-ensemble apparie post-reforme, avec le taux d'appariement
-    (4 etats) et l'avertissement sur le decalage temporel DVF / DPE en clair.
+    F-G) pour UNE commune (obligatoire -- comparer entre communes n'est pas
+    pertinent), sur le sous-ensemble apparie post-reforme, avec le taux
+    d'appariement (4 etats) et l'avertissement sur le decalage temporel DVF / DPE.
 
 Toute la logique de chargement / filtrage / agregation est dans
 `dashboard/data.py` (seam teste). Ce fichier ne fait que le cablage UI + Plotly,
@@ -54,11 +57,14 @@ class Filters:
     """Selection de la barre laterale, partagee par les deux vues."""
 
     vue: str
-    commune: dict | None  # entree de data.commune_choices(), ou None = toutes
+    commune: dict | None  # vue Marche : pilote la carte IRIS (None = toutes).
+    #   vue Impact DPE : commune obligatoire (jamais None).
     annee_min: str
     annee_max: str
     type_local: str | None  # None = tous types de bien
     groupe: str | None  # regroupement DPE (vue Impact DPE), None = tous
+    stat: str = "moyenne"  # "moyenne" | "mediane" -- courbe + carte de la vue Marche
+    communes_compare: tuple[str, ...] = ()  # noms casse DVF a superposer (vue Marche)
 
     @property
     def date_min(self) -> str:
@@ -108,25 +114,46 @@ def _sidebar(annees: list[str]) -> Filters:
     vue = st.sidebar.radio("Vue", ["Marché", "Impact DPE"])
 
     choices = data.commune_choices()
-    nom_sel = st.sidebar.selectbox("Commune", [TOUTES_COMMUNES, *sorted(c["nom"] for c in choices)])
-    commune = next((c for c in choices if c["nom"] == nom_sel), None)
-
+    noms = sorted(c["nom"] for c in choices)
     annee_min, annee_max = st.sidebar.select_slider(
         "Période", options=annees, value=(annees[0], annees[-1])
     )
 
-    # Vue Marché : la médiane n'a de sens que sur une population homogène ->
-    # un type de bien est obligatoire (pas de "Tous"). Vue Impact DPE : "Tous"
-    # autorisé, les barres restent séparées par type.
-    if vue == "Impact DPE":
-        type_sel = st.sidebar.selectbox("Type de bien", [TOUS_TYPES, *data.TYPES_BIEN])
-        type_local = None if type_sel == TOUS_TYPES else type_sel
-        groupe_sel = st.sidebar.selectbox("Regroupement DPE", [TOUS_GROUPES, *data.DPE_GROUPS])
-        groupe = None if groupe_sel == TOUS_GROUPES else groupe_sel
-    else:
+    if vue == "Marché":
+        # Courbe de référence = toutes communes ; les communes cochées se
+        # superposent. Une stat (moyenne / médiane) n'a de sens que sur une
+        # population homogène -> un type de bien est obligatoire (pas de "Tous").
+        stat_sel = st.sidebar.radio("Statistique", ["Moyenne", "Médiane"], horizontal=True)
+        stat = "moyenne" if stat_sel == "Moyenne" else "mediane"
         type_local = st.sidebar.selectbox("Type de bien", list(data.TYPES_BIEN))
-        groupe = None
+        sel = st.sidebar.multiselect("Communes à comparer", noms)
+        communes_compare = tuple(c["dvf_nom"] for c in choices if c["nom"] in sel)
+        # Selectbox distinct : pilote uniquement la carte IRIS (comportement
+        # inchangé -- global par défaut, zoom commune par commune).
+        nom_carte = st.sidebar.selectbox("Carte — commune", [TOUTES_COMMUNES, *noms])
+        commune = next((c for c in choices if c["nom"] == nom_carte), None)
+        return Filters(
+            vue=vue,
+            commune=commune,
+            annee_min=annee_min,
+            annee_max=annee_max,
+            type_local=type_local,
+            groupe=None,
+            stat=stat,
+            communes_compare=communes_compare,
+        )
 
+    # Vue Impact DPE : commune obligatoire. Mélanger les communes n'est pas
+    # comparable (un bien F à Biarritz front de mer reste plus cher qu'un bien A
+    # à Hasparren) -> pas d'option "Toutes". "Tous" types reste autorisé, les
+    # barres restent séparées par type.
+    default_idx = noms.index("Anglet") if "Anglet" in noms else 0
+    nom_sel = st.sidebar.selectbox("Commune", noms, index=default_idx)
+    commune = next(c for c in choices if c["nom"] == nom_sel)
+    type_sel = st.sidebar.selectbox("Type de bien", [TOUS_TYPES, *data.TYPES_BIEN])
+    type_local = None if type_sel == TOUS_TYPES else type_sel
+    groupe_sel = st.sidebar.selectbox("Regroupement DPE", [TOUS_GROUPES, *data.DPE_GROUPS])
+    groupe = None if groupe_sel == TOUS_GROUPES else groupe_sel
     return Filters(
         vue=vue,
         commune=commune,
@@ -134,23 +161,44 @@ def _sidebar(annees: list[str]) -> Filters:
         annee_max=annee_max,
         type_local=type_local,
         groupe=groupe,
+        stat="mediane",
     )
 
 
 def _vue_marche(f: Filters) -> None:
+    stat_label = f.stat.capitalize()
     st.header("Marché — prix au m²")
     st.caption(
-        "Ventes officielles DVF (DGFiP). Prix/m² calculé par mutation "
-        "(prix ÷ surface habitation totale, ADR 0006). La **médiane** est la "
-        "statistique de référence ; `n` = nombre de transactions."
+        f"Ventes officielles DVF (DGFiP). Prix/m² calculé par mutation "
+        f"(prix ÷ surface habitation totale, ADR 0006). Statistique affichée : "
+        f"**{f.stat}** (toggle sidebar) ; `n` = nombre de transactions."
     )
 
     rows = _agg_marche()
-    communes = [f.commune_dvf] if f.commune_dvf else sorted({r["commune"] for r in rows})
+
+    # Courbe de référence : toutes communes confondues, ré-agrégée depuis les
+    # mutations (moyenne / médiane d'ensemble, pas une moyenne de moyennes).
+    glob = data.market_trend_global(
+        _matched(),
+        type_local=f.type_local,
+        annee_min=f.annee_min,
+        annee_max=f.annee_max,
+    )
 
     fig = go.Figure()
-    total_n = 0
-    for com in communes:
+    if glob:
+        fig.add_trace(
+            go.Scatter(
+                x=[r["annee"] for r in glob],
+                y=[r[f.stat] for r in glob],
+                mode="lines+markers",
+                name="Toutes communes",
+                line={"color": "#111111", "width": 3},
+                customdata=[r["n"] for r in glob],
+                hovertemplate=_HOVER_NAMED,
+            )
+        )
+    for com in f.communes_compare:
         serie = data.market_trend(
             rows,
             commune=com,
@@ -160,11 +208,10 @@ def _vue_marche(f: Filters) -> None:
         )
         if not serie:
             continue
-        total_n += sum(r["n"] for r in serie)
         fig.add_trace(
             go.Scatter(
                 x=[r["annee"] for r in serie],
-                y=[r["mediane"] for r in serie],
+                y=[r[f.stat] for r in serie],
                 mode="lines+markers",
                 name=com.title(),
                 customdata=[r["n"] for r in serie],
@@ -172,27 +219,27 @@ def _vue_marche(f: Filters) -> None:
             )
         )
     fig.update_layout(
-        yaxis_title="Médiane €/m²",
+        yaxis_title=f"{stat_label} €/m²",
         xaxis_title="Année de mutation",
-        legend_title="Commune",
+        legend_title="Série",
         height=430,
         margin={"t": 30, "r": 10, "l": 10, "b": 10},
     )
-    st.metric("Mutations dans la sélection", _n(total_n))
-    if total_n:
+    st.metric("Mutations toutes communes (période)", _n(sum(r["n"] for r in glob)))
+    if glob:
         st.plotly_chart(fig, width="stretch")
     else:
         st.info("Aucune mutation pour cette sélection.")
 
-    st.subheader("Carte — prix médian/m² par IRIS")
+    st.subheader(f"Carte — prix {f.stat}/m² par IRIS")
     st.caption(
-        "Médiane cumulée toutes années, pour le type de bien sélectionné "
+        f"{stat_label} cumulée toutes années, pour le type de bien sélectionné "
         "(ADR 0004). Les communes à IRIS unique (zone = commune entière) "
         "apparaissent comme une seule zone. Le filtre *Période* n'agit pas sur "
         "la carte."
     )
     iris_vals = data.iris_map_values(
-        _agg_iris(), type_local=f.type_local, code_commune=f.code_commune
+        _agg_iris(), type_local=f.type_local, stat=f.stat, code_commune=f.code_commune
     )
     if not iris_vals:
         st.info("Aucune zone IRIS pour cette sélection.")
@@ -200,13 +247,13 @@ def _vue_marche(f: Filters) -> None:
 
     codes = {r["code_iris"] for r in iris_vals}
     center = data.geojson_center(_geojson(), codes) or _MAP_CENTER
-    zmin, zmax = data.color_range([r["mediane"] for r in iris_vals])
+    zmin, zmax = data.color_range([r["valeur"] for r in iris_vals])
     map_fig = go.Figure(
         go.Choroplethmap(
             geojson=_geojson(),
             featureidkey="properties.code_iris",
             locations=[r["code_iris"] for r in iris_vals],
-            z=[r["mediane"] for r in iris_vals],
+            z=[r["valeur"] for r in iris_vals],
             zmin=zmin,
             zmax=zmax,
             text=[r["nom_iris"] for r in iris_vals],
@@ -270,7 +317,7 @@ def _impact_breakdown_line(f: Filters, matched: list[dict]) -> None:
 
 
 def _vue_impact_dpe(f: Filters) -> None:
-    st.header("Impact DPE — prix au m² par regroupement d'étiquette")
+    st.header(f"Impact DPE — {f.commune['nom']} — prix au m² par regroupement d'étiquette")
 
     _matching_rate_block()
     st.warning(data.TEMPORAL_GAP_NOTE)

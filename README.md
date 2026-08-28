@@ -53,16 +53,19 @@ sans exécuter le pipeline.
 
 Deux vues :
 
-- **Marché** — tendance du prix/m² médian par commune et par année (2016+), carte choroplèthe
-  du prix/m² médian par zone IRIS. Le prix/m² est calculé **par mutation** (prix ÷ surface
-  habitation totale), pas par lot — sinon une vente d'immeuble en bloc fausserait toute une
-  zone (ADR 0006). Filtres : commune, période, type de bien (maison **ou** appartement —
-  une médiane mélangeant les deux n'aurait pas de sens).
-- **Impact DPE** — prix/m² par regroupement d'étiquette DPE (A-C / D / E / F-G) sur le
-  sous-ensemble apparié **post-réforme** (mutations ≥ juillet 2021), avec le **taux
-  d'appariement** (4 états : trouvé / résolu par consensus / non trouvé / ambigu) et
-  l'avertissement sur le décalage temporel DVF / DPE affichés en clair. Filtres : commune,
-  période, type de bien, regroupement DPE.
+- **Marché** — courbe de référence **toutes communes confondues** (prix/m² par année, 2016+),
+  plus une courbe par commune cochée pour comparer sans noyer le graphe sous 16 séries ;
+  carte choroplèthe du prix/m² par zone IRIS. Un toggle **Moyenne / Médiane** (moyenne par
+  défaut) pilote la courbe **et** la carte. Le prix/m² est calculé **par mutation** (prix ÷
+  surface habitation totale), pas par lot — sinon une vente d'immeuble en bloc fausserait
+  toute une zone (ADR 0006). Filtres : période, type de bien (maison **ou** appartement —
+  une stat mélangeant les deux n'aurait pas de sens).
+- **Impact DPE** — prix/m² par regroupement d'étiquette DPE (A-C / D / E / F-G) pour **une
+  commune** (obligatoire : comparer un bien F à Biarritz front de mer à un bien A à Hasparren
+  n'a pas de sens), sur le sous-ensemble apparié **post-réforme** (mutations ≥ juillet 2021),
+  avec le **taux d'appariement** (4 états : trouvé / résolu par consensus / non trouvé /
+  ambigu) et l'avertissement sur le décalage temporel DVF / DPE affichés en clair. Filtres :
+  commune, période, type de bien, regroupement DPE.
 
 ## Tests
 

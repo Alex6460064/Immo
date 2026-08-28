@@ -35,6 +35,7 @@ from dashboard.data import (
     load_matched,
     load_matching_counts,
     market_trend,
+    market_trend_global,
     matching_rate,
 )
 from pipeline.lib.parquet_io import write_parquet_rows
@@ -168,6 +169,57 @@ class TestMarketTrend:
         assert [r["annee"] for r in out] == ["2019", "2022"]
 
 
+class TestMarketTrendGlobal:
+    """Courbe de reference "toutes communes confondues" de la vue Marche :
+    re-agregee depuis les lignes brutes d'appariement (repli mutation ->
+    aggregate_by par annee), pas une moyenne de moyennes par commune. Porte
+    `moyenne` ET `mediane` -- l'UI choisit via le toggle de la sidebar."""
+
+    def _row(self, code_insee, date, typ, prix, surface):
+        return {
+            "commune": code_insee,
+            "code_insee": code_insee,
+            "no_disposition": "000001",
+            "nature_mutation": "Vente",
+            "date_mutation": date,
+            "type_local": typ,
+            "prix": prix,
+            "surface": surface,
+        }
+
+    def test_aggregates_all_communes_per_year(self):
+        rows = [
+            self._row("64024", "2022-01-01", "Maison", 300_000, 100),  # 3000
+            self._row("64122", "2022-05-01", "Maison", 500_000, 100),  # 5000
+            self._row("64024", "2023-01-01", "Maison", 800_000, 100),  # 8000
+        ]
+        out = market_trend_global(rows, type_local="Maison")
+        by = {r["annee"]: r for r in out}
+        assert [r["annee"] for r in out] == ["2022", "2023"]
+        assert by["2022"]["n"] == 2
+        assert by["2022"]["moyenne"] == pytest.approx(4000.0)
+        assert by["2022"]["mediane"] == pytest.approx(4000.0)
+        assert by["2023"]["moyenne"] == pytest.approx(8000.0)
+
+    def test_type_local_filter(self):
+        rows = [
+            self._row("64024", "2022-01-01", "Maison", 300_000, 100),
+            self._row("64122", "2022-01-01", "Appartement", 600_000, 100),
+        ]
+        out = market_trend_global(rows, type_local="Appartement")
+        assert len(out) == 1
+        assert out[0]["moyenne"] == pytest.approx(6000.0)
+
+    def test_annee_range_inclusive(self):
+        rows = [
+            self._row("64024", "2018-01-01", "Maison", 300_000, 100),
+            self._row("64024", "2022-01-01", "Maison", 500_000, 100),
+            self._row("64024", "2024-01-01", "Maison", 900_000, 100),
+        ]
+        out = market_trend_global(rows, type_local="Maison", annee_min="2020", annee_max="2023")
+        assert [r["annee"] for r in out] == ["2022"]
+
+
 class TestFilterIris:
     _ROWS = [
         {
@@ -227,15 +279,23 @@ class TestIrisMapValues:
         },
     ]
 
-    def test_returns_median_of_selected_type(self):
+    def test_default_stat_is_mediane(self):
         out = {r["code_iris"]: r for r in iris_map_values(self._ROWS, type_local="Maison")}
-        assert out["640240115"]["mediane"] == 4000.0
+        assert out["640240115"]["valeur"] == 4000.0
         assert out["640240115"]["n"] == 10
         assert set(out) == {"640240115", "402090000"}
 
+    def test_stat_moyenne_selects_the_mean_column(self):
+        out = {
+            r["code_iris"]: r
+            for r in iris_map_values(self._ROWS, type_local="Maison", stat="moyenne")
+        }
+        assert out["640240115"]["valeur"] == 9000.0
+        assert out["402090000"]["valeur"] == 3000.0
+
     def test_other_type_selects_other_rows(self):
         out = iris_map_values(self._ROWS, type_local="Appartement")
-        assert [r["mediane"] for r in out] == [6500.0]
+        assert [r["valeur"] for r in out] == [6500.0]
 
     def test_single_iris_commune_yields_one_row(self):
         out = iris_map_values(self._ROWS, type_local="Maison", code_commune="40209")
