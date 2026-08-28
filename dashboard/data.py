@@ -21,8 +21,10 @@ Sources (produites par le pipeline) :
 `agg_dpe.parquet` (#T12) n'est indexe que par (etiquette, type de bien) -- il ne
 permet pas les filtres commune / periode demandes par #15. Cette vue re-agrege
 donc depuis `dvf_dpe_matched.parquet` avec les MÊMES fonctions pures que
-`pipeline/05_aggregate.py` (`impact_dpe_rows` + `aggregate_by`) : sans filtre
-commune/periode, le resultat est exactement `agg_dpe.parquet`. Voir NOTES.md.
+`pipeline/05_aggregate.py` : `mutation_price_points` (repli mutation + garde-fous,
+#26) -> `impact_dpe_rows` -> `aggregate_by`. Sans filtre commune/periode, le
+resultat est exactement `agg_dpe.parquet` (au regroupement d'etiquette pres).
+Voir NOTES.md.
 
 Pas d'import Streamlit ici : le cache (`@st.cache_data`) et l'UI vivent dans
 `dashboard/app.py`.
@@ -42,9 +44,9 @@ from pipeline.lib.aggregate import (
     IMPACT_DPE_STATUSES,
     aggregate_by,
     impact_dpe_rows,
-    price_per_m2,
 )
 from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF
+from pipeline.lib.mutations import mutation_price_points
 from pipeline.lib.parquet_io import read_parquet_rows
 from pipeline.lib.publish_dashboard import DASHBOARD_MATCHED_COLUMNS
 
@@ -258,12 +260,12 @@ def iris_map_values(
     """Une ligne `agg_iris` par IRIS pour la carte choroplethe : prix **median**/m2
     du type de bien selectionne.
 
-    Mediane et non moyenne : DVF ne deduplique pas les mutations multi-lots, une
-    poignee de lignes prix/m2 aberrantes suffit a faire exploser la moyenne d'un
-    petit IRIS et a ecraser toute l'echelle de couleur. La mediane est la stat de
-    reference du projet (NOTES.md) -- ceci precise la formulation « prix moyen/m2 »
-    d'ADR 0004. La vue Marche impose toujours un `type_local`, donc un IRIS = une
-    ligne (pas de recombinaison entre types). Trie par `code_iris`.
+    Mediane et non moyenne : la mediane est la stat de reference du projet
+    (NOTES.md) -- ceci precise la formulation « prix moyen/m2 » d'ADR 0004. Le
+    prix/m2 est deja calcule par mutation et borne en amont (#26), la mediane
+    reste preferee pour sa robustesse a la queue haute des prix immobiliers. La
+    vue Marche impose toujours un `type_local`, donc un IRIS = une ligne (pas de
+    recombinaison entre types). Trie par `code_iris`.
     """
     kept = filter_iris(rows, code_commune=code_commune, type_local=type_local)
     return sorted(
@@ -281,22 +283,18 @@ def iris_map_values(
     )
 
 
-def color_range(
-    values: Sequence[float], *, upper_pct: float = 0.95, min_count: int = 6
-) -> tuple[float, float] | None:
-    """Bornes `(zmin, zmax)` de l'echelle de couleur de la carte, `zmax` plafonne
-    au centile `upper_pct` : sur le jeu courant un IRIS (Tarnos « Sud », n=86)
-    a une mediane appartement > 80 000 EUR/m2 -- lots mixtes, hors perimetre de
-    nettoyage (#1) -- qui ecrase toute l'echelle. La zone reste affichee et sa
-    valeur exacte reste au survol. En dessous de `min_count` valeurs, pas de
-    plafond (min..max). `None` si aucune valeur."""
+def color_range(values: Sequence[float]) -> tuple[float, float] | None:
+    """Bornes `(zmin, zmax)` = min / max des medianes IRIS pour l'echelle de
+    couleur de la carte. `None` si aucune valeur.
+
+    Plus de plafonnement au centile : depuis le repli mutation (#26, ADR 0006) le
+    prix/m2 est calcule par mutation (prix / somme des surfaces habitation) et
+    borne a [200, 30 000] EUR/m2 en amont -- il n'y a plus d'IRIS a mediane
+    aberrante a cacher, l'echelle peut refleter les vraies valeurs."""
     vs = sorted(v for v in values if v is not None)
     if not vs:
         return None
-    if len(vs) < min_count:
-        return (vs[0], vs[-1])
-    idx = min(len(vs) - 1, round(upper_pct * (len(vs) - 1)))
-    return (vs[0], vs[idx])
+    return (vs[0], vs[-1])
 
 
 def filter_matched(
@@ -331,11 +329,21 @@ def _impact_dpe_kept(
     groupe: str | None,
     cutoff: str,
 ) -> list[dict]:
-    """Lignes d'appariement retenues pour la vue "Impact DPE" : filtres de #15
-    puis `impact_dpe_rows` (etiquette certaine + mutation >= `cutoff`). Base
-    commune a `impact_dpe_aggregate` et `impact_dpe_breakdown`."""
+    """Points prix/m2 retenus pour la vue "Impact DPE" : repli mutation (#26,
+    un point par (mutation, etiquette)) puis filtres de #15 puis `impact_dpe_rows`
+    (etiquette certaine + mutation >= `cutoff`). Base commune a
+    `impact_dpe_aggregate` et `impact_dpe_breakdown`.
+
+    Le repli precede les filtres : tous les points d'une mutation partagent
+    commune / type_local / date (mono-type habitation, ADR 0006), donc filtrer
+    les points revient a filtrer les lignes -- mais le prix/m2 est deja calcule
+    sur la surface habitation de TOUTE la mutation, jamais sur le seul lot filtre.
+    """
+    points, _ = mutation_price_points(
+        list(matched_rows), extra_keys=("etiquette_dpe", "match_status")
+    )
     filtered = filter_matched(
-        matched_rows,
+        points,
         commune=commune,
         type_local=type_local,
         date_min=date_min,
@@ -360,12 +368,13 @@ def impact_dpe_aggregate(
     `F-G`, granularite demandee par #15), calcule a la volee depuis les lignes
     d'appariement.
 
-    MÊME chaine pure que `pipeline/05_aggregate.py` (`impact_dpe_rows` ->
-    `price_per_m2` -> `aggregate_by`), a la difference de la cle de groupe :
+    MÊME chaine pure que `pipeline/05_aggregate.py` (`mutation_price_points` ->
+    `impact_dpe_rows` -> `aggregate_by`), a la difference de la cle de groupe :
     `agg_dpe.parquet` groupe par etiquette exacte (A..G), cette vue par
     regroupement -- pour un `n` par barre suffisant sur le petit echantillon
-    apparie. Sans filtre commune/periode, les memes mutations sont agregees que
-    dans `agg_dpe.parquet` (memes effectifs totaux). Voir NOTES.md.
+    apparie. `n` compte des points (mutation x etiquette), pas des lots (#26).
+    Sans filtre commune/periode, les memes mutations sont agregees que dans
+    `agg_dpe.parquet`. Voir NOTES.md.
     """
     kept = _impact_dpe_kept(
         matched_rows,
@@ -376,14 +385,7 @@ def impact_dpe_aggregate(
         groupe=groupe,
         cutoff=cutoff,
     )
-    enriched = [
-        {
-            **r,
-            "prix_m2": price_per_m2(r.get("prix"), r.get("surface")),
-            "groupe": dpe_group(r.get("etiquette_dpe")),
-        }
-        for r in kept
-    ]
+    enriched = [{**r, "groupe": dpe_group(r.get("etiquette_dpe"))} for r in kept]
     return aggregate_by(enriched, ["groupe", "type_local"])
 
 
@@ -400,24 +402,26 @@ def impact_dpe_breakdown(
     """Composition du sous-ensemble alimentant la vue "Impact DPE" pour une
     selection donnee : `{retenues, resolu_consensus, pre_reforme_exclus}`.
 
-    `retenues` = mutations a etiquette certaine, posterieures au `cutoff`, avec un
-    prix/m2 exploitable. `pre_reforme_exclus` = mutations a etiquette certaine mais
-    anterieures au `cutoff` (comptees, pas supprimees -- cf. `TEMPORAL_GAP_NOTE`).
-    Sert la mention « dont N resolus par consensus » demandee par #15.
+    Effectifs en points (mutation x etiquette) depuis le repli #26, plus en lots.
+    `retenues` = points a etiquette certaine, posterieurs au `cutoff`, avec un
+    prix/m2 exploitable (les points sans prix/m2 valide n'existent pas -- une
+    mutation ecartee par les garde-fous ne produit aucun point).
+    `pre_reforme_exclus` = points a etiquette certaine mais anterieurs au `cutoff`
+    (comptes, pas supprimes -- cf. `TEMPORAL_GAP_NOTE`). Sert la mention
+    « dont N resolus par consensus » demandee par #15.
     """
+    points, _ = mutation_price_points(
+        list(matched_rows), extra_keys=("etiquette_dpe", "match_status")
+    )
     kept_pre = filter_matched(
-        matched_rows,
+        points,
         commune=commune,
         type_local=type_local,
         date_min=date_min,
         date_max=date_max,
         groupe=groupe,
     )
-    usable = [
-        r
-        for r in impact_dpe_rows(kept_pre, cutoff)
-        if price_per_m2(r.get("prix"), r.get("surface")) is not None
-    ]
+    usable = impact_dpe_rows(kept_pre, cutoff)
     return {
         "retenues": len(usable),
         "resolu_consensus": sum(1 for r in usable if r.get("match_status") == "resolu_consensus"),

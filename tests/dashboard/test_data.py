@@ -244,17 +244,15 @@ class TestIrisMapValues:
 
 
 class TestColorRange:
-    def test_caps_zmax_at_upper_percentile(self):
-        vals = [*range(1, 20), 9999]  # 20 valeurs, la derniere aberrante
-        zmin, zmax = color_range(vals)
-        assert zmin == 1
-        assert zmax < 9999  # plafonné, l'outlier ne fixe pas le haut
+    def test_min_and_max_of_values(self):
+        # plus de plafond centile depuis #26 : le prix/m2 est deja borne en amont
+        assert color_range([*range(1, 20), 9999]) == (1, 9999)
 
     def test_small_sample_uses_min_max(self):
         assert color_range([100.0, 200.0, 5000.0]) == (100.0, 5000.0)
 
     def test_ignores_none(self):
-        assert color_range([None, 5.0, None, 1.0], min_count=1) == (1.0, 5.0)
+        assert color_range([None, 5.0, None, 1.0]) == (1.0, 5.0)
 
     def test_empty_is_none(self):
         assert color_range([]) is None
@@ -312,6 +310,9 @@ class TestImpactDpeAggregate:
     def _row(self, commune, date, typ, etiq, status, prix, surface):
         return {
             "commune": commune,
+            "code_insee": commune[:5],
+            "no_disposition": "000001",
+            "nature_mutation": "Vente",
             "date_mutation": date,
             "type_local": typ,
             "etiquette_dpe": etiq,
@@ -375,6 +376,9 @@ class TestImpactDpeBreakdown:
     def _row(self, date, status, prix=300_000, surface=60):
         return {
             "commune": "ANGLET",
+            "code_insee": "64024",
+            "no_disposition": "000001",
+            "nature_mutation": "Vente",
             "date_mutation": date,
             "type_local": "Maison",
             "etiquette_dpe": "D",
@@ -515,6 +519,9 @@ class TestLoaders:
         rows = [
             {
                 "commune": "ANGLET",
+                "code_insee": "64024",
+                "no_disposition": "000001",
+                "nature_mutation": "Vente",
                 "date_mutation": "2022-01-01",
                 "type_local": "Maison",
                 "surface": 60.0,
@@ -524,6 +531,9 @@ class TestLoaders:
             },
             {
                 "commune": "ANGLET",
+                "code_insee": "64024",
+                "no_disposition": "000002",
+                "nature_mutation": "Vente",
                 "date_mutation": "2022-02-01",
                 "type_local": "Maison",
                 "surface": 50.0,
@@ -537,6 +547,9 @@ class TestLoaders:
             rows,
             {
                 "commune": "VARCHAR",
+                "code_insee": "VARCHAR",
+                "no_disposition": "VARCHAR",
+                "nature_mutation": "VARCHAR",
                 "date_mutation": "VARCHAR",
                 "type_local": "VARCHAR",
                 "surface": "DOUBLE",

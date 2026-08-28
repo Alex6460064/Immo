@@ -6,6 +6,33 @@ arbitrages plus fins, avec leur date et leur justification.
 
 ---
 
+## 2026-08-28 — Repli mutation pour le prix/m² (issue #26, ADR 0006)
+
+Carte dashboard : IRIS « Sud » de Tarnos à **82 339 €/m²** médiane appartement. Cause :
+`Valeur foncière` DVF est un montant de mutation recopié sur chaque ligne-lot du brut DGFiP,
+et le pipeline divisait par la surface d'un seul lot → une vente en bloc (promoteur) à
+6,6 M€ pour 65 appartements donnait 65 lignes à ~100 000 €/m².
+
+**Décision** (grilling 2026-08-28, détail dans [ADR 0006](docs/adr/0006-repli-mutation-prix-m2.md)) :
+`pipeline/lib/mutations.py` replie les lignes par mutation
+(`(date_mutation, code_insee, no_disposition, prix)`) avant tout calcul. Prix/m² =
+`prix ÷ Σ surface habitation`, habitation = Appartement + Maison, mono-type seulement
+(mutation mixte habitation+commercial exclue et comptée). Garde-fous : `nature_mutation`
+∈ {Vente, VEFA, Adjudication}, prix/m² ∈ [200, 30 000]. `agg_marche`/`agg_iris` = 1 point
+par mutation ; `agg_dpe` = 1 point par (mutation, étiquette). `n` = transactions, plus lots.
+
+**Chiffres de référence pour la non-régression** (jeu courant) : Tarnos « Sud »
+appartement **2 352 €/m²** (n=15) ; médiane IRIS max = Biarritz « Front de Mer » maison
+8 675 €/m² ; aucun IRIS > 30 000. Vue Marché : 44 626 points transaction ; exclusions
+746 mixtes / 99 nature / 228 hors bande. Taux d'appariement DVF↔DPE **inchangés** (la
+jointure n'est pas touchée).
+
+Le dashboard : `color_range` ne plafonne plus au 95ᵉ centile ; encart « médiane aberrante
+— issue #1 » retiré ; instantané `data/dashboard/dvf_dpe_matched.parquet` + 3 colonnes
+(`code_insee`, `no_disposition`, `nature_mutation`).
+
+---
+
 ## 2026-08-27 — Seuil de distance passe 2 : `DISTANCE_THRESHOLD_M = 15`
 
 Calibré sur 5 733 paires (adresse normalisée identique DVF↔DPE, géocodées des deux côtés).

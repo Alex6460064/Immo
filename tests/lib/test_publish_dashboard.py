@@ -53,6 +53,9 @@ def _build_processed(processed_dir, raw_dir):
         [
             {
                 "commune": "ANGLET",
+                "code_insee": "64024",
+                "no_disposition": "000001",
+                "nature_mutation": "Vente",
                 "date_mutation": "2022-01-01",
                 "type_local": "Maison",
                 "surface": 60.0,
@@ -64,6 +67,9 @@ def _build_processed(processed_dir, raw_dir):
             },
             {
                 "commune": "BIARRITZ",
+                "code_insee": "64122",
+                "no_disposition": "000001",
+                "nature_mutation": "Vente",
                 "date_mutation": "2023-05-01",
                 "type_local": "Appartement",
                 "surface": 40.0,
@@ -76,6 +82,9 @@ def _build_processed(processed_dir, raw_dir):
         ],
         {
             "commune": "VARCHAR",
+            "code_insee": "VARCHAR",
+            "no_disposition": "VARCHAR",
+            "nature_mutation": "VARCHAR",
             "date_mutation": "VARCHAR",
             "type_local": "VARCHAR",
             "surface": "DOUBLE",

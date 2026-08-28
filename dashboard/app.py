@@ -140,8 +140,9 @@ def _sidebar(annees: list[str]) -> Filters:
 def _vue_marche(f: Filters) -> None:
     st.header("Marché — prix au m²")
     st.caption(
-        "Ventes officielles DVF (DGFiP). La **médiane** est la statistique de "
-        "référence (robuste aux mutations multi-lots) ; `n` = nombre de mutations."
+        "Ventes officielles DVF (DGFiP). Prix/m² calculé par mutation "
+        "(prix ÷ surface habitation totale, ADR 0006). La **médiane** est la "
+        "statistique de référence ; `n` = nombre de transactions."
     )
 
     rows = _agg_marche()
@@ -227,12 +228,6 @@ def _vue_marche(f: Filters) -> None:
     # scrollZoom désactivé : sinon un défilement de page au-dessus de la carte
     # la zoome par accident.
     st.plotly_chart(map_fig, width="stretch", config={"scrollZoom": False})
-    if any(r["mediane"] > zmax for r in iris_vals):
-        st.caption(
-            "Échelle plafonnée au 95ᵉ centile : quelques IRIS à médiane aberrante "
-            "(mutations multi-lots, hors périmètre de nettoyage — issue #1) "
-            "saturent la couleur haute. Valeur exacte au survol."
-        )
 
 
 def _matching_rate_block() -> None:

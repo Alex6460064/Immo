@@ -7,9 +7,20 @@ du BAB élargi.
 ## Language
 
 **Mutation**:
-Une vente immobilière individuelle enregistrée dans DVF. Unité de base de l'analyse — une ligne
-DVF brute correspond à une mutation (potentiellement plusieurs biens/lots).
+Une vente immobilière individuelle enregistrée dans DVF. Unité de base de l'analyse. Le
+fichier brut DGFiP porte **une ligne par lot** : une mutation multi-lots (immeuble vendu en
+bloc) s'étale sur des dizaines de lignes partageant la même clé
+`(date_mutation, code_insee, no_disposition, prix)`. La `Valeur foncière` est le montant de
+la mutation entière, recopié sur chaque ligne.
 _Avoid_: Transaction, vente (utiliser Mutation pour désigner l'enregistrement DVF précis).
+
+**Prix au m²**:
+Toujours calculé au niveau **mutation** : `prix ÷ somme des surfaces habitation de la
+mutation`, jamais `prix ÷ surface d'un seul lot` (qui gonflerait une vente en bloc à
+~100 000 €/m²). Uniquement pour les mutations mono-type habitation (Appartement **ou**
+Maison) ; garde-fous `nature_mutation` et bande [200, 30 000] €/m². `n` compte des
+transactions, pas des lots. Voir [ADR 0006](docs/adr/0006-repli-mutation-prix-m2.md).
+_Avoid_: Prix du lot, prix/m² par ligne.
 
 **Vente appariée**:
 Une mutation DVF pour laquelle un DPE correspondant a été trouvé par rapprochement d'adresse.

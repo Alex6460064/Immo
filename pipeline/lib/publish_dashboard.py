@@ -25,9 +25,15 @@ import duckdb
 # `dashboard/data.py` importe cette liste -- source unique. Elle vit ici (feuille
 # de `pipeline/lib`, sans dependance vers `dashboard/`) plutot que l'inverse :
 # le pipeline ne doit jamais dependre du dashboard. L'instantane ne publie que
-# ces colonnes : le fichier tombe de ~2,5 Mo a < 1 Mo.
+# ces colonnes : le fichier reste < 1 Mo.
+# code_insee / no_disposition / nature_mutation : cle de mutation + regle A du
+# repli prix/m2 au niveau mutation (issue #26), pour que la re-agregation live de
+# la vue Impact DPE donne le meme resultat que `agg_dpe.parquet`.
 DASHBOARD_MATCHED_COLUMNS: tuple[str, ...] = (
     "commune",
+    "code_insee",
+    "no_disposition",
+    "nature_mutation",
     "date_mutation",
     "type_local",
     "surface",

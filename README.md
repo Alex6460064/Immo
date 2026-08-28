@@ -54,8 +54,10 @@ sans exécuter le pipeline.
 Deux vues :
 
 - **Marché** — tendance du prix/m² médian par commune et par année (2016+), carte choroplèthe
-  du prix/m² médian par zone IRIS. Filtres : commune, période, type de bien (maison **ou**
-  appartement — une médiane mélangeant les deux n'aurait pas de sens).
+  du prix/m² médian par zone IRIS. Le prix/m² est calculé **par mutation** (prix ÷ surface
+  habitation totale), pas par lot — sinon une vente d'immeuble en bloc fausserait toute une
+  zone (ADR 0006). Filtres : commune, période, type de bien (maison **ou** appartement —
+  une médiane mélangeant les deux n'aurait pas de sens).
 - **Impact DPE** — prix/m² par regroupement d'étiquette DPE (A-C / D / E / F-G) sur le
   sous-ensemble apparié **post-réforme** (mutations ≥ juillet 2021), avec le **taux
   d'appariement** (4 états : trouvé / résolu par consensus / non trouvé / ambigu) et
