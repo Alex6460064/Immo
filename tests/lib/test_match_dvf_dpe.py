@@ -162,12 +162,20 @@ class TestDedupIsOrderIndependent:
         # l'autre a ~200 m (hors seuil). Selon le survivant de la dedup, la
         # mutation est trouve ou non_trouve -- ne doit pas dependre de l'ordre.
         near = _dpe(
-            "SAME", "12 RUE VOISINE", lat=_REF_LAT + 0.00005, lon=_REF_LON,
-            date_etablissement="2022-03-01", **self._SIG,
+            "SAME",
+            "12 RUE VOISINE",
+            lat=_REF_LAT + 0.00005,
+            lon=_REF_LON,
+            date_etablissement="2022-03-01",
+            **self._SIG,
         )
         far = _dpe(
-            "SAME", "12 RUE VOISINE", lat=_REF_LAT + 0.002, lon=_REF_LON,
-            date_etablissement="2022-03-01", **self._SIG,
+            "SAME",
+            "12 RUE VOISINE",
+            lat=_REF_LAT + 0.002,
+            lon=_REF_LON,
+            date_etablissement="2022-03-01",
+            **self._SIG,
         )
         mutation = _mutation("10 RUE DU MOULIN", lat=_REF_LAT, lon=_REF_LON, surface=44.0)
         r1 = classify_match_indexed(mutation, build_dpe_index([near, far], 15))

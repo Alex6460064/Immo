@@ -171,11 +171,13 @@ class TestMatchAllIsOrderIndependent:
         sig = dict(etiquette="D", ges="D", type_batiment="appartement", periode="2013-2021")
         near = self._geo(
             _dpe("SAME", "64102", "12 RUE VOISINE", 44.2, **sig),
-            self._REF_LAT + 0.00005, self._REF_LON,
+            self._REF_LAT + 0.00005,
+            self._REF_LON,
         )
         far = self._geo(
             _dpe("SAME", "64102", "12 RUE VOISINE", 44.2, **sig),
-            self._REF_LAT + 0.002, self._REF_LON,
+            self._REF_LAT + 0.002,
+            self._REF_LON,
         )
 
         outcomes = set()
