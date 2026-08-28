@@ -67,8 +67,13 @@ Ordre de priorité (non négociable) :
 - **API BAN** (`api-adresse.data.gouv.fr`) — géocodage des adresses DVF/DPE.
 - **API ADEME** (`data-fair`, jeu `dpe-v2-logements-existants`) — récupération DPE filtrée par
   code postal.
-- **Streamlit** — dashboard, déployé sur **Streamlit Community Cloud** (v1).
-- **Plotly** — graphiques + carte choroplèthe IRIS (`px.choropleth_mapbox`).
+- **Streamlit** — dashboard, déployé sur **Streamlit Community Cloud** (live :
+  https://dvf-dpe-pays-basque.streamlit.app/). Manifeste `requirements.txt` régénéré depuis
+  `uv.lock` ; `.python-version` épinglé à `3.12` (runtime Cloud).
+- **Plotly** — graphiques + carte choroplèthe IRIS via `go.Choroplethmap` (MapLibre, sans
+  jeton). `px.choropleth_mapbox` est déprécié depuis Plotly 6 — ne pas l'utiliser.
+- **Typst + lilaq** — mise en page et graphes de la synthèse PDF (`pipeline/07_report.py`,
+  groupe de dépendances `report` ; binaire Typst embarqué).
 - **pytest + ruff** — tests (TDD) et lint, exécutés en **CI GitHub Actions** à chaque push.
 - Pas de Pull Request (projet solo) : revue de code locale à la fin de chaque ticket.
 
@@ -90,11 +95,20 @@ l'avance** — détectée et loggée à l'exécution du téléchargement.
 diagnostic, surface.
 
 **Jointure DVF × DPE** — algorithme en 3 passes : texte exact (adresse normalisée) → repli
-distance géocodée (API BAN, seuil calibré) → départage par surface (± 2m²) si plusieurs
-candidats. Détail complet : [ADR 0003](docs/adr/0003-algorithme-appariement-dvf-dpe.md).
-Résultat par mutation : **trouvé / non trouvé / ambigu** — les 3 taux sont une donnée du
-projet, pas un détail à cacher, toujours affichés/loggés séparément. Pas d'appariement forcé
-au hasard sur un cas ambigu.
+distance géocodée (API BAN, seuil calibré `DISTANCE_THRESHOLD_M = 15`) → départage par surface
+(± 2 m²) si plusieurs candidats, avec dédup des DPE et filtre par type de bâtiment, puis
+consensus d'étiquette pour sauver les ambigus (briques B + C + A2, [#23](https://github.com/Alex6460064/Immo/issues/23)).
+Détail complet : [ADR 0003](docs/adr/0003-algorithme-appariement-dvf-dpe.md).
+Résultat par mutation : **4 états** — `trouvé` / `resolu_consensus` (candidats indistinguables
+mais même étiquette) / `non trouvé` / `ambigu` — les 4 taux sont une donnée du projet, pas un
+détail à cacher, toujours affichés/loggés séparément. Pas d'appariement forcé au hasard sur un
+cas ambigu.
+
+**Prix au m²** — calculé au niveau **mutation** (`prix ÷ Σ surfaces habitation`), jamais par
+lot : le brut DGFiP recopie le montant de la mutation sur chaque ligne-lot, diviser par la
+surface d'un seul lot ferait exploser une vente d'immeuble en bloc (~100 000 €/m²) et
+fausserait une zone entière. Garde-fous : mono-type habitation, bande [200, 30 000] €/m². Voir
+[ADR 0006](docs/adr/0006-repli-mutation-prix-m2.md).
 
 **IRIS** — contours géographiques officiels INSEE/IGN (data.gouv.fr, geojson gratuit), utilisés
 pour la carte choroplèthe du dashboard (prix moyen/m² par zone). Voir
@@ -115,8 +129,11 @@ commune ne doit toucher qu'un seul endroit.
 ```
 data/raw/          # téléchargements bruts, non versionné (.gitignore)
 data/processed/    # données nettoyées / jointes / agrégées
+data/dashboard/    # instantané versionné pour Streamlit Cloud (produit par 06_publish_dashboard_data)
 config/communes.py # codes INSEE ciblés
-pipeline/          # download_dvf(+_historique) + download_dpe → 02_clean_dvf → 02b_geocode_ban → 03_clean_dpe → 04_join → 04b_join_iris → 05_aggregate → 06_publish_dashboard_data → 07_report
+pipeline/          # scripts I/O numérotés : download_dvf(+_historique) + download_dpe → 02_clean_dvf → 02b_geocode_ban → 03_clean_dpe → 04_join → 04b_join_iris → 05_aggregate → 06_publish_dashboard_data → 07_report
+pipeline/lib/      # logique pure (pas d'I/O, pas de DuckDB) : normalisation, mutations, appariement, agrégats, rapport
+pipeline/report/   # template Typst de la synthèse PDF (template.typ)
 dashboard/app.py   # Streamlit + Plotly (graphes + carte choroplèthe IRIS)
 reports/           # synthèse PDF versionnée (07_report.py), livrable recruteurs
 notebooks/         # exploration ponctuelle, jamais source de vérité du pipeline
@@ -153,7 +170,9 @@ cohérence des totaux avant/après → régression sur le dashboard.
 - **Utiliser le Python système** :
   `C:\Users\alexa\AppData\Local\Programs\Python\Python314\python.exe` (a `duckdb` 1.5.5, **pas
   `pandas`** → `.fetchall()` sur les résultats DuckDB, jamais `.df()`). Lancer depuis la racine
-  du repo pour les imports du projet.
+  du repo pour les imports du projet. Le Python système est en 3.14 ; `.python-version` du repo
+  est épinglé à `3.12` (aligné sur le runtime Streamlit Cloud) — écart sans conséquence, la
+  suite pytest passe sur les deux.
 - **Dashboard périmé après un fix data** : le repo/local peut être correct alors que
   Streamlit Cloud sert encore l'ancien build (`@st.cache_data` keyé sur les args, pas la mtime).
   Vérifier d'abord le parquet committé ; si bon → **Reboot app + Clear cache** sur
