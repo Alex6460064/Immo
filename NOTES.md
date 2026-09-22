@@ -300,8 +300,14 @@ verdicts produits par un autre modèle. `normalize_response` lève si le modèle
 **Mesure sur 50 mutations ambiguës** (44 clés distinctes — 6 lignes-lots partagent mutation +
 adresse + pool, donc une seule question) : **1 177 tokens/appel**, **0,49 s/appel**,
 **0,0022 $**. Extrapolé aux 18 063 ambiguës : **≈ 0,89 $** (estimation du spec : 1,15 $ —
-confirmée) et **≈ 148 min en séquentiel** contre ~15 min estimés. L'écart de durée est réel :
-la passe complète de #37 devra paralléliser (l'API documente 1 200 requêtes/min).
+confirmée) et **≈ 148 min en séquentiel**.
+
+Ces 148 min ne mesurent pas la vitesse de Jev — 0,49 s est un aller-retour réseau normal —
+mais le coût de ne pas paralléliser. La limite documentée (1 200 req/min = 20 req/s) donne un
+plancher de **15,0 min** pour 18 063 requêtes, atteint avec **~10 requêtes en vol**
+(20 req/s × 0,49 s) ; le plafond de tokens (250 000/s) reste loin. **L'estimation ~15 min du
+spec est donc juste** : elle supposait de tourner à la cadence autorisée. Ce qui reste à
+faire en #37 : `judge_cases` boucle en séquentiel et doit passer en concurrent.
 
 **Résultat : 0 verdict `resolu_jev` sur 44.** Score médian 1,22 (« même bâtiment, logement
 non déterminé »), mais **marge médiane 0,01 et marge maximale 0,05** — aucun cas au-dessus
