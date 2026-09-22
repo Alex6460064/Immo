@@ -49,12 +49,42 @@ SURFACE_TOLERANCE_M2 = 2.0
 # au dimensionnement des cellules de la grille spatiale.
 _DEG_LAT_M = 111_320.0
 
-# Etats d'appariement porteurs d'une etiquette DPE certaine (spec §5, D3) : `trouve`
-# (identite du DPE connue) et `resolu_consensus` (identite inconnue, etiquette certaine
-# par consensus -- se lit "ambigu sauve", pas "trouve degrade"). Les deux entrent dans
-# la vue Impact DPE. Source unique : importee par join_dvf_dpe (rapport d'appariement),
-# impact_dpe (impact_dpe_rows / impact_dpe_slice) et dashboard/data (resumes).
+# Jeu PAR DEFAUT des etats d'appariement porteurs d'une etiquette DPE certaine
+# (spec §5, D3) : `trouve` (identite du DPE connue) et `resolu_consensus` (identite
+# inconnue, etiquette certaine par consensus -- se lit "ambigu sauve", pas "trouve
+# degrade"). Les deux entrent dans la vue Impact DPE.
+#
+# Definition unique ET seule valeur par defaut (#34). Les trois consommateurs
+# parametres -- join_dvf_dpe.match_all (rapport d'appariement),
+# impact_dpe.impact_dpe_rows / impact_dpe_slice (vue Impact DPE) et
+# dashboard.data.matching_rate / impact_dpe_aggregate / impact_dpe_breakdown
+# (resumes) -- prennent le jeu en parametre `statuses` et retombent ici. Un jeu
+# different (p. ex. avec le 5e etat `resolu_jev`, #33) se passe explicitement,
+# sans qu'aucune des trois surfaces puisse diverger : le test differentiel
+# `tests/test_statuts_certains.py` verrouille la propriete.
+#
+# Exception assumee : `pipeline/07_report.py` (synthese PDF) reste epingle sur ce
+# defaut, hors perimetre de #34 -- c'est #39 qui l'ouvrira en meme temps qu'il
+# fera figurer la contribution de Jev dans le PDF. Tant que ce n'est pas fait, un
+# 5e etat compterait dans le dashboard et le rapport d'appariement mais PAS dans
+# le PDF.
 IMPACT_DPE_STATUSES = ("trouve", "resolu_consensus")
+
+
+def normalize_statuses(statuses: Iterable[str]) -> tuple[str, ...]:
+    """Normalise un jeu de statuts en tuple, pour les consommateurs de
+    `IMPACT_DPE_STATUSES`.
+
+    Refuse une chaine nue : `Sequence[str]` l'accepte, mais `tuple("trouve")`
+    l'eclaterait en caracteres et aucun `match_status` ne serait plus retenu --
+    tranche vide, agregats vides, aucune erreur. On prefere l'echec bruyant.
+    """
+    if isinstance(statuses, str):
+        raise TypeError(
+            f"jeu de statuts attendu (tuple/liste/set), chaine nue recue : {statuses!r}. "
+            f"Pour un seul statut, passer ({statuses!r},)."
+        )
+    return tuple(statuses)
 
 
 class MatchResult(NamedTuple):

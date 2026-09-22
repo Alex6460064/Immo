@@ -17,10 +17,10 @@ la semantique de la selection utilisateur (`keep` construit cote dashboard,
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import NamedTuple
 
-from pipeline.lib.match_dvf_dpe import IMPACT_DPE_STATUSES
+from pipeline.lib.match_dvf_dpe import IMPACT_DPE_STATUSES, normalize_statuses
 from pipeline.lib.mutations import mutation_price_points
 
 # Dimensions qui, combinees a la cle mutation, definissent un point Impact DPE :
@@ -30,16 +30,23 @@ from pipeline.lib.mutations import mutation_price_points
 IMPACT_DPE_EXTRA_KEYS: tuple[str, str] = ("etiquette_dpe", "match_status")
 
 
-def impact_dpe_rows(rows: list[dict], post_reform_cutoff: str) -> list[dict]:
+def impact_dpe_rows(
+    rows: list[dict],
+    post_reform_cutoff: str,
+    *,
+    statuses: Iterable[str] = IMPACT_DPE_STATUSES,
+) -> list[dict]:
     """Sous-ensemble des mutations retenu pour l'agregat Impact DPE (`agg_dpe`) :
-    appariees a une etiquette certaine (`match_status` dans `IMPACT_DPE_STATUSES`)
-    ET `date_mutation` >= `post_reform_cutoff` -- apparier un prix anterieur a la
-    reforme a un DPE etabli bien plus tard ne mesure rien (NOTES.md 2026-08-27).
-    Date absente -> exclue (comparaison lexicographique sur chaine ISO)."""
+    appariees a une etiquette certaine (`match_status` dans `statuses`, par defaut
+    `IMPACT_DPE_STATUSES`) ET `date_mutation` >= `post_reform_cutoff` -- apparier
+    un prix anterieur a la reforme a un DPE etabli bien plus tard ne mesure rien
+    (NOTES.md 2026-08-27). Date absente -> exclue (comparaison lexicographique sur
+    chaine ISO)."""
+    retenus = normalize_statuses(statuses)
     return [
         row
         for row in rows
-        if row.get("match_status") in IMPACT_DPE_STATUSES
+        if row.get("match_status") in retenus
         and (row.get("date_mutation") or "") >= post_reform_cutoff
     ]
 
@@ -72,6 +79,7 @@ def impact_dpe_slice(
     *,
     cutoff: str,
     keep: Callable[[dict], bool] | None = None,
+    statuses: Iterable[str] = IMPACT_DPE_STATUSES,
 ) -> ImpactDpeSlice:
     """Replie `matched_rows` (lignes-lots `dvf_dpe_matched`) en points prix/m2 au
     niveau (mutation, etiquette), applique `keep` s'il est fourni (predicat
@@ -84,12 +92,16 @@ def impact_dpe_slice(
 
     `keep=None` -> aucun filtre : `05_aggregate.py` obtient exactement les
     mutations de `agg_dpe.parquet` (invariant
-    `test_slice_sans_keep_egale_recette_pipeline`)."""
+    `test_slice_sans_keep_egale_recette_pipeline`).
+
+    `statuses` : jeu des etats tenus pour porteurs d'une etiquette certaine (#34),
+    par defaut `IMPACT_DPE_STATUSES`."""
+    retenus = normalize_statuses(statuses)
     all_points, exclusions = mutation_price_points(matched_rows, extra_keys=IMPACT_DPE_EXTRA_KEYS)
     kept = all_points if keep is None else [p for p in all_points if keep(p)]
 
-    certaine = [p for p in kept if p.get("match_status") in IMPACT_DPE_STATUSES]
-    points = impact_dpe_rows(kept, cutoff)
+    certaine = [p for p in kept if p.get("match_status") in retenus]
+    points = impact_dpe_rows(kept, cutoff, statuses=retenus)
     return ImpactDpeSlice(
         points=points,
         n_points=len(all_points),

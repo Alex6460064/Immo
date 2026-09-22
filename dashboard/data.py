@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import json
 import unicodedata
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 
 import duckdb
@@ -44,7 +44,7 @@ from config.communes import COMMUNES
 from pipeline.lib.aggregate import aggregate_by
 from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF
 from pipeline.lib.impact_dpe import impact_dpe_slice
-from pipeline.lib.match_dvf_dpe import IMPACT_DPE_STATUSES
+from pipeline.lib.match_dvf_dpe import IMPACT_DPE_STATUSES, normalize_statuses
 from pipeline.lib.mutations import mutation_price_points
 from pipeline.lib.parquet_io import read_parquet_rows
 from pipeline.lib.publish_dashboard import DASHBOARD_MATCHED_COLUMNS
@@ -155,19 +155,39 @@ def commune_from_code_iris(code_iris: str | None) -> str | None:
     return code_iris[:5]
 
 
-def matching_rate(counts: Mapping[str, int]) -> dict:
+def matching_rate(
+    counts: Mapping[str, int],
+    *,
+    statuses: Iterable[str] = IMPACT_DPE_STATUSES,
+) -> dict:
     """Taux d'appariement DVF x DPE a partir des effectifs par `match_status`
     (CONTEXT.md : les 4 etats affiches separement, jamais masques).
 
     Retourne `{total, statuses: [{status, label, n, pct}], etiquette_certaine:
-    {n, pct}}` -- `etiquette_certaine` = `trouve` + `resolu_consensus`.
+    {n, pct}}`. `statuses` = jeu des etats porteurs d'une etiquette certaine
+    (#34), par defaut `IMPACT_DPE_STATUSES` (`trouve` + `resolu_consensus`).
+
+    `statuses` doit etre inclus dans `MATCH_STATUSES` : le total et les lignes
+    par etat sont calcules sur les etats AFFICHES, donc un statut hors de ce jeu
+    entrerait dans `etiquette_certaine` sans entrer dans le denominateur -- un
+    taux dont les parties ne s'additionnent plus, exactement ce que CONTEXT.md
+    interdit. Ajouter le 5e etat (#33) suppose de l'ajouter d'abord a
+    `MATCH_STATUS_LABELS` (c'est le ticket #38).
     """
+    retenus = normalize_statuses(statuses)
+    inconnus = [s for s in retenus if s not in MATCH_STATUS_LABELS]
+    if inconnus:
+        raise ValueError(
+            f"statuts absents de MATCH_STATUS_LABELS : {', '.join(inconnus)}. "
+            "Les etiqueter d'abord (#38), sinon le taux affiche serait incoherent."
+        )
+
     total = sum(int(counts.get(s, 0)) for s in MATCH_STATUSES)
 
     def pct(n: int) -> float:
         return (n / total * 100) if total else 0.0
 
-    statuses = [
+    lignes = [
         {
             "status": s,
             "label": MATCH_STATUS_LABELS[s],
@@ -176,10 +196,10 @@ def matching_rate(counts: Mapping[str, int]) -> dict:
         }
         for s in MATCH_STATUSES
     ]
-    certaine = sum(int(counts.get(s, 0)) for s in IMPACT_DPE_STATUSES)
+    certaine = sum(int(counts.get(s, 0)) for s in retenus)
     return {
         "total": total,
-        "statuses": statuses,
+        "statuses": lignes,
         "etiquette_certaine": {"n": certaine, "pct": pct(certaine)},
     }
 
@@ -362,6 +382,7 @@ def impact_dpe_aggregate(
     date_max: str | None = None,
     groupe: str | None = None,
     cutoff: str = POST_REFORM_CUTOFF,
+    statuses: Iterable[str] = IMPACT_DPE_STATUSES,
 ) -> list[dict]:
     """Agregat prix/m2 par (regroupement d'etiquette DPE, type de bien) de la vue
     "Impact DPE" -- prix/m2 median/moyen par `DPE_GROUPS` (`A-C` / `D` / `E` /
@@ -378,6 +399,7 @@ def impact_dpe_aggregate(
     sl = impact_dpe_slice(
         list(matched_rows),
         cutoff=cutoff,
+        statuses=statuses,
         keep=matched_keep(
             commune=commune,
             type_local=type_local,
@@ -399,6 +421,7 @@ def impact_dpe_breakdown(
     date_max: str | None = None,
     groupe: str | None = None,
     cutoff: str = POST_REFORM_CUTOFF,
+    statuses: Iterable[str] = IMPACT_DPE_STATUSES,
 ) -> dict:
     """Composition du sous-ensemble alimentant la vue "Impact DPE" pour une
     selection donnee : `{retenues, resolu_consensus, pre_reforme_exclus}`.
@@ -417,6 +440,7 @@ def impact_dpe_breakdown(
     sl = impact_dpe_slice(
         list(matched_rows),
         cutoff=cutoff,
+        statuses=statuses,
         keep=matched_keep(
             commune=commune,
             type_local=type_local,

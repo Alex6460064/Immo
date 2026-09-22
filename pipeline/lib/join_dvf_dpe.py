@@ -17,6 +17,7 @@ rapport ; toute la logique testable vit ici et dans `pipeline/lib/match_dvf_dpe.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from typing import NamedTuple
 
 from pipeline.lib.clean_dpe import POST_REFORM_CUTOFF
@@ -25,6 +26,7 @@ from pipeline.lib.match_dvf_dpe import (
     IMPACT_DPE_STATUSES,
     build_dpe_index,
     classify_match_indexed,
+    normalize_statuses,
 )
 
 # Champs de la mutation DVF recopies verbatim dans dvf_dpe_matched.parquet
@@ -86,8 +88,9 @@ class MatchReport(NamedTuple):
 
     Dicts ordinaires (pas `Counter`) : `MatchReport` est immuable et comparable
     en test. `methode_counts` et `pre_reforme_count` ne portent que sur les
-    lignes a etiquette certaine (`status` dans `IMPACT_DPE_STATUSES`) ;
-    `filtre_type_count` porte sur toutes les mutations.
+    lignes a etiquette certaine (`status` dans le jeu `statuses` passe a
+    `match_all`, par defaut `IMPACT_DPE_STATUSES`) ; `filtre_type_count` porte
+    sur toutes les mutations.
     """
 
     total: int
@@ -103,6 +106,8 @@ def match_all(
     dvf_rows: list[dict],
     dpe_rows: list[dict],
     seuil_distance_m: float,
+    *,
+    statuses: Iterable[str] = IMPACT_DPE_STATUSES,
 ) -> tuple[list[dict], MatchReport]:
     """`join` complet DVF x DPE. Retourne (lignes de sortie, `MatchReport`).
 
@@ -110,7 +115,13 @@ def match_all(
     par commune, interroge chaque mutation. Le contexte bati (etiquette, GES,
     type, periode) est porte par `MatchResult` -- sur `resolu_consensus` le
     `numero_dpe` est NULL mais l'etiquette est connue par consensus.
+
+    `statuses` : jeu des etats tenus pour porteurs d'une etiquette certaine, qui
+    conditionne `methode_counts` et `pre_reforme_count` (#34). Les lignes de
+    sortie et `status_counts` n'en dependent pas -- le classement d'une mutation
+    reste celui des 4 passes.
     """
+    retenus = normalize_statuses(statuses)
     dpe_by_commune, dpe_sans_commune = group_dpe_by_commune(dpe_rows)
 
     index_by_commune = {
@@ -132,7 +143,7 @@ def match_all(
         result = classify_match_indexed(mutation, index_by_commune.get(code, empty_index))
         status_counts[result.status] += 1
 
-        certaine = result.status in IMPACT_DPE_STATUSES
+        certaine = result.status in retenus
         if certaine and result.methode is not None:
             methode_counts[result.methode] += 1
         if result.filtre_type_applique:
