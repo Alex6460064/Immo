@@ -113,6 +113,15 @@ class MatchResult(NamedTuple):
     periode_construction: str | None = None
 
 
+# Resultat interne des passes : le `MatchResult` + le sous-ensemble de candidats
+# sur lequel la passe 4 est restee indecise (vide des que le statut n'est pas
+# `ambigu`). Les deux entrees publiques historiques jettent le pool ;
+# `classify_with_pool` le rend. Un seul parcours produit les deux : aucune logique
+# de selection n'est dupliquee, donc aucune derive possible entre le pool juge par
+# Jev et l'ambiguite reellement mesuree (#35).
+_Outcome = tuple[MatchResult, list[dict]]
+
+
 def _context(dpe: dict) -> dict:
     """Contexte bati d'un DPE pour `MatchResult` (spec §6)."""
     return {
@@ -227,14 +236,15 @@ def _unanimous(subset: list[dict], field: str) -> str | None:
     return next(iter(values)) if len(values) == 1 and None not in values else None
 
 
-def _consensus_pass(subset: list[dict], filtre_type: bool) -> MatchResult:
+def _consensus_pass(subset: list[dict], filtre_type: bool) -> _Outcome:
     """Passe 4 (spec §4 A2, D5) : si tous les candidats du sous-ensemble partagent
     la meme `etiquette_dpe` non nulle -> `resolu_consensus` (identite inconnue,
     etiquette certaine). GES / type / periode portes seulement s'ils sont eux aussi
-    unanimes. Sinon -> `ambigu`."""
+    unanimes. Sinon -> `ambigu`, et le sous-ensemble juge remonte tel quel : c'est
+    le pool que `classify_with_pool` expose a la brique de desambiguisation (#35)."""
     etiquette = _unanimous(subset, "etiquette_dpe")
     if etiquette is None:
-        return MatchResult("ambigu", None, None, filtre_type_applique=filtre_type)
+        return MatchResult("ambigu", None, None, filtre_type_applique=filtre_type), list(subset)
     return MatchResult(
         "resolu_consensus",
         None,
@@ -244,26 +254,36 @@ def _consensus_pass(subset: list[dict], filtre_type: bool) -> MatchResult:
         etiquette_ges=_unanimous(subset, "etiquette_ges"),
         type_batiment=_unanimous(subset, "type_batiment"),
         periode_construction=_unanimous(subset, "periode_construction"),
-    )
+    ), []
+
+
+def _judged_subset(mutation: dict, candidats: list[dict]) -> list[dict]:
+    """Sous-ensemble sur lequel la passe 3 puis la passe 4 statuent : la fenetre de
+    surface si elle retient au moins un candidat, sinon le pool d'entree (spec §5 --
+    quand la surface ne discrimine rien, la question porte sur tout le batiment).
+
+    `candidats` porte toujours >= 2 elements (`_resolve_pool` traite le cas unique
+    avant d'appeler), donc un sous-ensemble de taille 1 ne peut venir que de la
+    fenetre de surface : c'est le departage de la passe 3.
+    """
+    within = _surface_within(mutation, candidats)
+    return within if within else candidats
 
 
 def _surface_tiebreak(
     mutation: dict, candidats: list[dict], methode: str, filtre_type: bool
-) -> MatchResult:
+) -> _Outcome:
     """Passe 3 puis passe 4 : un seul candidat dans la tolerance de surface -> trouve.
-    Sinon, passe 4 consensus sur `within` s'il reste >= 2 candidats, sinon sur le pool
-    d'entree (spec §5 -- quand la surface ne discrimine rien, la question porte sur
-    l'ensemble du batiment)."""
-    within = _surface_within(mutation, candidats)
-    if len(within) == 1:
+    Sinon, passe 4 consensus sur le sous-ensemble juge (`_judged_subset`)."""
+    subset = _judged_subset(mutation, candidats)
+    if len(subset) == 1:
         return MatchResult(
             "trouve",
-            within[0].get("numero_dpe"),
+            subset[0].get("numero_dpe"),
             f"{methode}_surface",
             filtre_type_applique=filtre_type,
-            **_context(within[0]),
-        )
-    subset = within if len(within) >= 2 else candidats
+            **_context(subset[0]),
+        ), []
     return _consensus_pass(subset, filtre_type)
 
 
@@ -294,7 +314,7 @@ def _within_distance(
     return near
 
 
-def _resolve_pool(mutation: dict, pool: list[dict], methode: str) -> MatchResult:
+def _resolve_pool(mutation: dict, pool: list[dict], methode: str) -> _Outcome:
     """Pool multi-candidats (passe 1 texte exact >1, ou passe 2 distance >1) :
     filtre C `type_batiment` (narrow-only) -> passe 3 surface -> passe 4 consensus."""
     pool, filtre_type = _type_filter(pool, mutation.get("type_local"))
@@ -302,26 +322,26 @@ def _resolve_pool(mutation: dict, pool: list[dict], methode: str) -> MatchResult
         d = pool[0]
         return MatchResult(
             "trouve", d.get("numero_dpe"), methode, filtre_type_applique=filtre_type, **_context(d)
-        )
+        ), []
     return _surface_tiebreak(mutation, pool, methode, filtre_type)
 
 
-def _resolve(mutation: dict, exact: list[dict], near: list[dict]) -> MatchResult:
+def _resolve(mutation: dict, exact: list[dict], near: list[dict]) -> _Outcome:
     """Applique passes 1->2->3(->4) a partir des sous-ensembles deja calcules :
     `exact` = DPE a adresse_normalisee identique, `near` = DPE geocodes a <= seuil
     (liste vide si la mutation n'a pas de coordonnees : la passe 2 ne trouve rien)."""
     if len(exact) == 1:
         d = exact[0]
-        return MatchResult("trouve", d.get("numero_dpe"), "texte_exact", **_context(d))
+        return MatchResult("trouve", d.get("numero_dpe"), "texte_exact", **_context(d)), []
     if exact:
         return _resolve_pool(mutation, exact, "texte_exact")
 
     if len(near) == 1:
         d = near[0]
-        return MatchResult("trouve", d.get("numero_dpe"), "distance", **_context(d))
+        return MatchResult("trouve", d.get("numero_dpe"), "distance", **_context(d)), []
     if near:
         return _resolve_pool(mutation, near, "distance")
-    return MatchResult("non_trouve", None, None)
+    return MatchResult("non_trouve", None, None), []
 
 
 def classify_match(
@@ -361,7 +381,7 @@ def classify_match(
         if lat is None or lon is None
         else _within_distance(lat, lon, dpe_candidats, seuil_distance_m)
     )
-    return _resolve(mutation, exact, near)
+    return _resolve(mutation, exact, near)[0]
 
 
 class DpeIndex(NamedTuple):
@@ -400,8 +420,23 @@ def build_dpe_index(dpe_candidats: list[dict], seuil_distance_m: float) -> DpeIn
 def classify_match_indexed(mutation: dict, index: DpeIndex) -> MatchResult:
     """Comme `classify_match` mais via un `DpeIndex` pre-construit -- meme resultat,
     sans balayer tous les DPE de la commune a chaque mutation."""
+    return classify_with_pool(mutation, index)[0]
+
+
+def classify_with_pool(mutation: dict, index: DpeIndex) -> _Outcome:
+    """`classify_match_indexed` + le pool de candidats reste indecis.
+
+    Retourne `(MatchResult, pool)`. `pool` est vide sauf si le statut est `ambigu` ;
+    il porte alors, dans l'ordre d'indexation, le sous-ensemble exact sur lequel la
+    passe 4 a echoue a degager un consensus -- apres filtre C `type_batiment` et
+    apres restriction a la fenetre de surface quand celle-ci retient >= 2 candidats.
+
+    C'est l'entree de la brique de desambiguisation (#35 / spec #33) : Jev doit juger
+    l'ambiguite que l'algorithme a reellement rencontree, pas un pool reconstitue a
+    cote.
+    """
     if index.size == 0:
-        return MatchResult("non_trouve", None, None)
+        return MatchResult("non_trouve", None, None), []
 
     adresse_mutation = _norm(mutation.get("adresse_normalisee"))
     exact = index.by_addr.get(adresse_mutation, []) if adresse_mutation else []

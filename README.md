@@ -162,6 +162,7 @@ uv run python pipeline/02b_geocode_ban.py          # géocodage des adresses DVF
 uv run python pipeline/03_clean_dpe.py
 uv run python pipeline/04_join.py                  # appariement DVF↔DPE + rapport 4 états
 uv run python pipeline/04b_join_iris.py            # rattachement spatial mutation → IRIS
+uv run python pipeline/04c_jev_disambiguate.py     # désambiguïsation Jev des mutations ambiguës (optionnel, clé API)
 uv run python pipeline/05_aggregate.py             # agrégats commune / IRIS / étiquette DPE
 uv run python pipeline/06_publish_dashboard_data.py  # instantané versionné data/dashboard/
 uv run --group report python pipeline/07_report.py   # synthèse PDF (reports/, lit data/dashboard/)

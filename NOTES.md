@@ -285,3 +285,32 @@ uv export --no-dev --no-hashes --no-emit-project --format requirements-txt -o re
 aligne le runtime Cloud sur `requires-python = ">=3.12"` — 3.12 est disponible partout, pas
 de pari sur la dernière version supportée par la plateforme. Suite pytest vérifiée verte sur
 3.12.
+
+## 2026-09-22 — Socle Jev : seuils provisoires et premier résultat mesuré (#35)
+
+**Seuils de décision, provisoires** (`pipeline/lib/jev_decision.py`) : `SCORE_MIN = 1.5`,
+`MARGE_MIN = 0.5`, `CONFIANCE_MIN = 0.5`, `MAX_CANDIDATES = 8`. Aucun n'est calibré — c'est
+#36 (backtest sur les mutations `trouve`, vérité terrain gratuite) qui doit les fixer sur
+une courbe exactitude × confiance. Ils sont nommés, jamais en dur dans un appel.
+
+**Modèle épinglé** : `jev-1.13.0`, jamais l'alias `jev-latest`. La clé de cache porte cette
+chaîne : avec un alias, une montée de version côté TypeSafe réutiliserait en silence des
+verdicts produits par un autre modèle. `normalize_response` lève si le modèle résolu diffère.
+
+**Mesure sur 50 mutations ambiguës** (44 clés distinctes — 6 lignes-lots partagent mutation +
+adresse + pool, donc une seule question) : **1 177 tokens/appel**, **0,49 s/appel**,
+**0,0022 $**. Extrapolé aux 18 063 ambiguës : **≈ 0,89 $** (estimation du spec : 1,15 $ —
+confirmée) et **≈ 148 min en séquentiel** contre ~15 min estimés. L'écart de durée est réel :
+la passe complète de #37 devra paralléliser (l'API documente 1 200 requêtes/min).
+
+**Résultat : 0 verdict `resolu_jev` sur 44.** Score médian 1,22 (« même bâtiment, logement
+non déterminé »), mais **marge médiane 0,01 et marge maximale 0,05** — aucun cas au-dessus
+de 0,1, quelle que soit la taille du pool. C'est la marge, pas le score, qui bloque : dans un
+pool ambigu les adresses candidates sont quasi identiques, donc Jev leur donne le même score.
+
+Signal inverse net : quand le score est haut (≥ 1,25) la confiance moyenne tombe à **0,44** ;
+quand il est bas (< 0,5) elle monte à **0,57**. Jev est sûr pour **rejeter**, incertain pour
+**confirmer**. Conséquence méthodologique à trancher avant #36/#40 : la brique semble plus
+utile en **D2** (repli sur `non_trouve` — confirmer/rejeter *un* candidat) qu'en **D1**
+(départager *entre* candidats quasi identiques). Un taux faible reste publiable : il dirait
+que la normalisation d'adresse détruit plus d'information qu'elle n'en laisse.

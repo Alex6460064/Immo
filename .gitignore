@@ -17,3 +17,8 @@ data/processed/*
 
 # OS / editor
 .DS_Store
+
+# Secrets (cle API TypeSafe/Jev) : jamais versionnes -- voir spec #33 (ADR 0007 a venir, #39)
+.env
+.env.*
+.streamlit/secrets.toml

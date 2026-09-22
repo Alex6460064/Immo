@@ -24,6 +24,16 @@ dev = [
 report = [
     "typst>=0.15,<0.16",
 ]
+# Brique Jev (pipeline/04c_jev_disambiguate.py, spec #33) uniquement -- hors chemin
+# de deploiement (le dashboard lit des verdicts DEJA calcules, jamais le modele) et
+# hors CI (aucun test n'importe typesafe_sdk : le module pur n'a pas de reseau et le
+# client est teste via un faux `ask`).
+# Groupe non-defaut : `uv sync --group jev` pour l'installer.
+# Version bornee : la forme de SystemOneResponse (.model / .answers / .usage) est
+# celle que `jev_client.normalize_response` sait lire.
+jev = [
+    "typesafe-sdk>=0.7.1,<0.8",
+]
 
 [tool.ruff]
 line-length = 100

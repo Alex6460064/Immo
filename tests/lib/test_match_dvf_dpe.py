@@ -17,6 +17,7 @@ from pipeline.lib.match_dvf_dpe import (
     build_dpe_index,
     classify_match,
     classify_match_indexed,
+    classify_with_pool,
     dedup_dpe,
 )
 
@@ -593,3 +594,67 @@ class TestIndexedMatchesReferenceImplementation:
     def test_empty_index_is_non_trouve(self):
         index = build_dpe_index([], 15)
         assert classify_match_indexed(_mutation("10 RUE A"), index).status == "non_trouve"
+
+
+class TestClassifyWithPool:
+    """`classify_with_pool` expose le sous-ensemble de candidats sur lequel la passe 4
+    est restee indecise -- c'est exactement ce pool que Jev doit juger (#35 / spec #33).
+
+    Juger autre chose que ce pool ferait porter le verdict sur une ambiguite
+    differente de celle mesuree par l'algorithme.
+    """
+
+    def test_result_is_identical_to_classify_match_indexed(self):
+        candidates = TestIndexedMatchesReferenceImplementation._CANDIDATES
+        index = build_dpe_index(candidates, 15)
+        for mutation in TestIndexedMatchesReferenceImplementation._MUTATIONS:
+            result, _pool = classify_with_pool(mutation, index)
+            assert result == classify_match_indexed(mutation, index)
+
+    def test_pool_is_non_empty_exactly_when_status_is_ambigu(self):
+        candidates = TestIndexedMatchesReferenceImplementation._CANDIDATES
+        index = build_dpe_index(candidates, 15)
+        for mutation in TestIndexedMatchesReferenceImplementation._MUTATIONS:
+            result, pool = classify_with_pool(mutation, index)
+            assert bool(pool) == (result.status == "ambigu")
+
+    def test_ambiguous_pool_holds_at_least_two_candidates_with_divergent_labels(self):
+        candidates = [
+            _dpe("D1", "10 RUE A", surface=50.0, etiquette="C"),
+            _dpe("D2", "10 RUE A", surface=95.0, etiquette="F"),
+        ]
+        mutation = _mutation("10 RUE A", surface=200.0)
+        result, pool = classify_with_pool(mutation, build_dpe_index(candidates, 15))
+        assert result.status == "ambigu"
+        assert {d["numero_dpe"] for d in pool} == {"D1", "D2"}
+        assert len({d["etiquette_dpe"] for d in pool}) > 1
+
+    def test_pool_is_narrowed_to_the_surface_window_when_it_holds_two_or_more(self):
+        """Quand >= 2 candidats tombent dans la tolerance de surface, la passe 4 statue
+        sur ce sous-ensemble : le pool jugé par Jev doit etre le meme, pas le pool large."""
+        candidates = [
+            _dpe("IN1", "10 RUE A", surface=50.0, etiquette="C"),
+            _dpe("IN2", "10 RUE A", surface=51.0, etiquette="F"),
+            _dpe("OUT", "10 RUE A", surface=200.0, etiquette="A"),
+        ]
+        result, pool = classify_with_pool(
+            _mutation("10 RUE A", surface=50.5), build_dpe_index(candidates, 15)
+        )
+        assert result.status == "ambigu"
+        assert {d["numero_dpe"] for d in pool} == {"IN1", "IN2"}
+
+    def test_pool_excludes_candidates_removed_by_the_type_filter(self):
+        candidates = [
+            _dpe("APPT1", "10 RUE A", surface=50.0, etiquette="C", type_batiment="appartement"),
+            _dpe("APPT2", "10 RUE A", surface=95.0, etiquette="F", type_batiment="appartement"),
+            _dpe("MAISON", "10 RUE A", surface=120.0, etiquette="A", type_batiment="maison"),
+        ]
+        mutation = _mutation("10 RUE A", surface=200.0, type_local="Appartement")
+        result, pool = classify_with_pool(mutation, build_dpe_index(candidates, 15))
+        assert result.status == "ambigu"
+        assert "MAISON" not in {d["numero_dpe"] for d in pool}
+
+    def test_empty_index_gives_no_pool(self):
+        result, pool = classify_with_pool(_mutation("10 RUE A"), build_dpe_index([], 15))
+        assert result.status == "non_trouve"
+        assert pool == []

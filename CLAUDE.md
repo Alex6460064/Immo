@@ -132,8 +132,9 @@ commune ne doit toucher qu'un seul endroit.
 data/raw/          # téléchargements bruts, non versionné (.gitignore)
 data/processed/    # données nettoyées / jointes / agrégées
 data/dashboard/    # instantané versionné pour Streamlit Cloud (produit par 06_publish_dashboard_data)
+data/jev/          # verdicts Jev versionnés (cache de 04c) : un clone frais rejoue sans clé API
 config/communes.py # codes INSEE ciblés
-pipeline/          # scripts I/O numérotés : download_dvf(+_historique) + download_dpe → 02_clean_dvf → 02b_geocode_ban → 03_clean_dpe → 04_join → 04b_join_iris → 05_aggregate → 06_publish_dashboard_data → 07_report
+pipeline/          # scripts I/O numérotés : download_dvf(+_historique) + download_dpe → 02_clean_dvf → 02b_geocode_ban → 03_clean_dpe → 04_join → 04b_join_iris → 04c_jev_disambiguate → 05_aggregate → 06_publish_dashboard_data → 07_report
 pipeline/lib/      # logique pure (pas d'I/O, pas de DuckDB) : normalisation, mutations, appariement, agrégats, rapport
 pipeline/report/   # template Typst de la synthèse PDF (template.typ)
 dashboard/app.py   # Streamlit + Plotly (graphes + carte choroplèthe IRIS)
@@ -195,6 +196,7 @@ python pipeline/02b_geocode_ban.py         # géocode les adresses DVF via l'API
 python pipeline/03_clean_dpe.py
 python pipeline/04_join.py                 # appariement DVF↔DPE (texte → distance → surface) + rapport
 python pipeline/04b_join_iris.py           # rattache chaque mutation géocodée à son IRIS
+python pipeline/04c_jev_disambiguate.py    # désambiguïsation Jev des mutations ambiguës (clé API optionnelle)
 python pipeline/05_aggregate.py            # agrégats par commune / IRIS / étiquette DPE
 python pipeline/06_publish_dashboard_data.py  # instantané versionné data/dashboard/ (déploiement Cloud)
 python pipeline/07_report.py              # synthèse PDF recruteurs (reports/, lit data/dashboard/)
