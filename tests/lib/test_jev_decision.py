@@ -21,6 +21,7 @@ from pipeline.lib.jev_decision import (
     MAX_CANDIDATES,
     QUESTIONS_VERSION,
     SCORE_MIN,
+    best_candidate,
     build_questions,
     build_state,
     cache_key,
@@ -156,6 +157,40 @@ class TestBuildQuestions:
 
     def test_empty_pool_asks_nothing(self):
         assert build_questions([]) == {}
+
+
+class TestBestCandidate:
+    """`best_candidate` (#36) rend le meilleur candidat AVANT tout seuil -- c'est ce
+    dont le backtest a besoin pour comparer un verdict a la verite terrain quel que
+    soit le seuil teste, y compris sur un cas que `decide` laisserait indecis."""
+
+    def test_empty_pool_gives_no_winner(self):
+        assert best_candidate(_answers([]), []) == (None, 0.0, 0.0, 0.0)
+
+    def test_single_candidate_pool_has_margin_equal_to_score(self):
+        """Note de calibration (#36) : sur un pool d'UN candidat, marge == score --
+        il n'y a pas de second score pour departager."""
+        best, score, marge, confiance = best_candidate(_answers([1.4]), [_dpe("D1")])
+        assert (best, score, marge) == (0, 1.4, 1.4)
+        assert confiance == 0.95
+
+    def test_winner_identified_even_below_every_threshold(self):
+        """Un score faible ne fait pas disparaitre le meilleur candidat -- seul
+        `decide` applique les seuils. Le backtest doit pouvoir dire : le meilleur
+        candidat etait-il le bon, meme quand `decide` serait reste indecis ?"""
+        pool = [_dpe("D1"), _dpe("D2")]
+        best, score, marge, _ = best_candidate(_answers([0.4, 0.1]), pool)
+        assert best == 0
+        assert score == pytest.approx(0.4)
+        assert marge == pytest.approx(0.3)
+
+    def test_decide_agrees_with_best_candidate_on_the_winner(self):
+        pool = [_dpe("D1", etiquette="C"), _dpe("D2", etiquette="F")]
+        answers = _answers([2.0, 0.1])
+        best, score, marge, confiance = best_candidate(answers, pool)
+        verdict = decide(answers, pool, entry_status="ambigu")
+        assert pool[best]["numero_dpe"] == verdict.numero_dpe
+        assert (verdict.score, verdict.marge, verdict.confiance) == (score, marge, confiance)
 
 
 class TestDecide:

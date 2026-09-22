@@ -17,6 +17,7 @@ from pipeline.lib.match_dvf_dpe import (
     build_dpe_index,
     classify_match,
     classify_match_indexed,
+    classify_with_backtest_pool,
     classify_with_pool,
     dedup_dpe,
 )
@@ -656,5 +657,70 @@ class TestClassifyWithPool:
 
     def test_empty_index_gives_no_pool(self):
         result, pool = classify_with_pool(_mutation("10 RUE A"), build_dpe_index([], 15))
+        assert result.status == "non_trouve"
+        assert pool == []
+
+
+class TestClassifyWithBacktestPool:
+    """`classify_with_backtest_pool` (#36) expose, pour les `trouve` departages par
+    surface, le pool multi-candidats considere AVANT que la surface ne tranche --
+    exactement ce que Jev verrait si l'identite etait masquee. C'est la verite
+    terrain gratuite du backtest : le statut et l'identite restent ceux de
+    `classify_with_pool` / `classify_match_indexed`, seule l'exposition du pool change.
+    """
+
+    def test_result_is_identical_to_classify_match_indexed(self):
+        candidates = TestIndexedMatchesReferenceImplementation._CANDIDATES
+        index = build_dpe_index(candidates, 15)
+        for mutation in TestIndexedMatchesReferenceImplementation._MUTATIONS:
+            result, _pool = classify_with_backtest_pool(mutation, index)
+            assert result == classify_match_indexed(mutation, index)
+
+    def test_surface_tiebreak_exposes_the_pre_surface_pool(self):
+        candidates = [
+            _dpe("IN1", "10 RUE A", surface=50.0, etiquette="C"),
+            _dpe("IN2", "10 RUE A", surface=95.0, etiquette="F"),
+        ]
+        mutation = _mutation("10 RUE A", surface=50.5)
+        result, pool = classify_with_backtest_pool(mutation, build_dpe_index(candidates, 15))
+        assert result.status == "trouve"
+        assert result.numero_dpe == "IN1"
+        assert {d["numero_dpe"] for d in pool} == {"IN1", "IN2"}
+
+    def test_single_exact_address_gives_a_one_candidate_pool(self):
+        """`texte_exact` / `distance` singuliers n'ont jamais eu de second candidat --
+        pool a un seul element, le regime `marge == score` (cf. `decide`)."""
+        candidates = [_dpe("SOLO", "10 RUE A", surface=50.0, etiquette="C")]
+        result, pool = classify_with_backtest_pool(
+            _mutation("10 RUE A", surface=50.0), build_dpe_index(candidates, 15)
+        )
+        assert result.status == "trouve"
+        assert [d["numero_dpe"] for d in pool] == ["SOLO"]
+
+    def test_ambiguous_case_gives_no_pool(self):
+        """`ambigu` / `resolu_consensus` n'ont pas d'identite certaine a masquer --
+        c'est `classify_with_pool` qui les couvre, pas cette fonction."""
+        candidates = [
+            _dpe("D1", "10 RUE A", surface=50.0, etiquette="C"),
+            _dpe("D2", "10 RUE A", surface=95.0, etiquette="F"),
+        ]
+        mutation = _mutation("10 RUE A", surface=200.0)
+        result, pool = classify_with_backtest_pool(mutation, build_dpe_index(candidates, 15))
+        assert result.status == "ambigu"
+        assert pool == []
+
+    def test_pool_excludes_candidates_removed_by_the_type_filter(self):
+        candidates = [
+            _dpe("APPT1", "10 RUE A", surface=50.0, etiquette="C", type_batiment="appartement"),
+            _dpe("APPT2", "10 RUE A", surface=95.0, etiquette="F", type_batiment="appartement"),
+            _dpe("MAISON", "10 RUE A", surface=51.0, etiquette="A", type_batiment="maison"),
+        ]
+        mutation = _mutation("10 RUE A", surface=50.5, type_local="Appartement")
+        result, pool = classify_with_backtest_pool(mutation, build_dpe_index(candidates, 15))
+        assert result.status == "trouve"
+        assert "MAISON" not in {d["numero_dpe"] for d in pool}
+
+    def test_empty_index_gives_no_pool(self):
+        result, pool = classify_with_backtest_pool(_mutation("10 RUE A"), build_dpe_index([], 15))
         assert result.status == "non_trouve"
         assert pool == []

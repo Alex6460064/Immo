@@ -316,7 +316,15 @@ def _within_distance(
 
 def _resolve_pool(mutation: dict, pool: list[dict], methode: str) -> _Outcome:
     """Pool multi-candidats (passe 1 texte exact >1, ou passe 2 distance >1) :
-    filtre C `type_batiment` (narrow-only) -> passe 3 surface -> passe 4 consensus."""
+    filtre C `type_batiment` (narrow-only) -> passe 3 surface -> passe 4 consensus.
+
+    ATTENTION : `_resolve_pool_backtest` (#36) reimplemente cette meme sequence pour
+    exposer, en plus, le pool pre-surface d'un `trouve`. Toute passe ajoutee/modifiee
+    ici (filtre, departage, consensus) doit etre repercutee la-bas, sous peine de
+    faire juger au backtest une ambiguite differente de celle que l'algorithme
+    rencontre reellement -- le test differentiel de `TestClassifyWithBacktestPool`
+    (tests/lib/test_match_dvf_dpe.py) ne verrouille que le `MatchResult`, pas la
+    structure du pool expose."""
     pool, filtre_type = _type_filter(pool, mutation.get("type_local"))
     if len(pool) == 1:
         d = pool[0]
@@ -423,21 +431,10 @@ def classify_match_indexed(mutation: dict, index: DpeIndex) -> MatchResult:
     return classify_with_pool(mutation, index)[0]
 
 
-def classify_with_pool(mutation: dict, index: DpeIndex) -> _Outcome:
-    """`classify_match_indexed` + le pool de candidats reste indecis.
-
-    Retourne `(MatchResult, pool)`. `pool` est vide sauf si le statut est `ambigu` ;
-    il porte alors, dans l'ordre d'indexation, le sous-ensemble exact sur lequel la
-    passe 4 a echoue a degager un consensus -- apres filtre C `type_batiment` et
-    apres restriction a la fenetre de surface quand celle-ci retient >= 2 candidats.
-
-    C'est l'entree de la brique de desambiguisation (#35 / spec #33) : Jev doit juger
-    l'ambiguite que l'algorithme a reellement rencontree, pas un pool reconstitue a
-    cote.
-    """
-    if index.size == 0:
-        return MatchResult("non_trouve", None, None), []
-
+def _gather_candidates(mutation: dict, index: DpeIndex) -> tuple[list[dict], list[dict]]:
+    """Candidats des passes 1 (texte exact) et 2 (distance <= seuil), via l'index de
+    la commune -- factorise entre `classify_with_pool` et `classify_with_backtest_pool`
+    pour que les deux voient strictement le meme pool d'entree."""
     adresse_mutation = _norm(mutation.get("adresse_normalisee"))
     exact = index.by_addr.get(adresse_mutation, []) if adresse_mutation else []
 
@@ -454,4 +451,82 @@ def classify_with_pool(mutation: dict, index: DpeIndex) -> _Outcome:
                 bucket.extend(index.grid.get((i, j), ()))
         near = _within_distance(lat, lon, bucket, index.seuil_distance_m)
 
-    return _resolve(mutation, list(exact), near)
+    return list(exact), near
+
+
+def classify_with_pool(mutation: dict, index: DpeIndex) -> _Outcome:
+    """`classify_match_indexed` + le pool de candidats reste indecis.
+
+    Retourne `(MatchResult, pool)`. `pool` est vide sauf si le statut est `ambigu` ;
+    il porte alors, dans l'ordre d'indexation, le sous-ensemble exact sur lequel la
+    passe 4 a echoue a degager un consensus -- apres filtre C `type_batiment` et
+    apres restriction a la fenetre de surface quand celle-ci retient >= 2 candidats.
+
+    C'est l'entree de la brique de desambiguisation (#35 / spec #33) : Jev doit juger
+    l'ambiguite que l'algorithme a reellement rencontree, pas un pool reconstitue a
+    cote.
+    """
+    if index.size == 0:
+        return MatchResult("non_trouve", None, None), []
+    exact, near = _gather_candidates(mutation, index)
+    return _resolve(mutation, exact, near)
+
+
+def _resolve_pool_backtest(mutation: dict, pool: list[dict], methode: str) -> _Outcome:
+    """Comme `_resolve_pool`, mais un `trouve` par departage de surface expose aussi
+    le pool multi-candidats PRE-surface (#36) : c'est ce que Jev verrait si
+    l'identite etait masquee. `ambigu` / `resolu_consensus` restent hors de portee
+    de cette fonction (aucune identite certaine a masquer) -- pool vide.
+
+    Sequence VOLONTAIREMENT dupliquee de `_resolve_pool` (voir sa note d'attention) :
+    les deux doivent rester synchronisees a la main."""
+    pool, filtre_type = _type_filter(pool, mutation.get("type_local"))
+    if len(pool) == 1:
+        d = pool[0]
+        return MatchResult(
+            "trouve", d.get("numero_dpe"), methode, filtre_type_applique=filtre_type, **_context(d)
+        ), [d]
+    subset = _judged_subset(mutation, pool)
+    if len(subset) == 1:
+        d = subset[0]
+        result = MatchResult(
+            "trouve",
+            d.get("numero_dpe"),
+            f"{methode}_surface",
+            filtre_type_applique=filtre_type,
+            **_context(d),
+        )
+        return result, pool
+    return _consensus_pass(subset, filtre_type)[0], []
+
+
+def classify_with_backtest_pool(mutation: dict, index: DpeIndex) -> _Outcome:
+    """Verite terrain gratuite du backtest Jev (#36) : meme statut/identite que
+    `classify_with_pool`, mais pour tout `trouve`, le pool rendu est l'ensemble des
+    candidats en jeu au moment ou l'algorithme a tranche -- exactement ce que Jev
+    jugerait si la reponse etait masquee :
+
+      - `texte_exact` / `distance` singuliers -> pool a UN candidat (le seul jamais
+        en jeu : pas de distractor, seul `SCORE_MIN` peut mordre -- cf. la note de
+        calibration sur `decide`) ;
+      - `*_surface` -> pool multi-candidats considere AVANT que la surface ne tranche
+        (`SCORE_MIN` et `MARGE_MIN` mordent tous deux -- meme structure qu'`ambigu`).
+
+    Vide pour `ambigu` / `resolu_consensus` : pas d'identite certaine a masquer,
+    c'est `classify_with_pool` qui les couvre."""
+    if index.size == 0:
+        return MatchResult("non_trouve", None, None), []
+    exact, near = _gather_candidates(mutation, index)
+
+    if len(exact) == 1:
+        d = exact[0]
+        return MatchResult("trouve", d.get("numero_dpe"), "texte_exact", **_context(d)), [d]
+    if exact:
+        return _resolve_pool_backtest(mutation, exact, "texte_exact")
+
+    if len(near) == 1:
+        d = near[0]
+        return MatchResult("trouve", d.get("numero_dpe"), "distance", **_context(d)), [d]
+    if near:
+        return _resolve_pool_backtest(mutation, near, "distance")
+    return MatchResult("non_trouve", None, None), []

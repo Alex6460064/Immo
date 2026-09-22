@@ -29,9 +29,9 @@ le `Noul` de garde ne l'annule pas. Sinon l'etat d'entree est CONSERVE : la briq
 ne fabrique jamais un appariement (CONTEXT.md -- jamais de choix force au hasard).
 Le garde peut annuler un verdict, jamais en creer un.
 
-Les trois seuils sont provisoires : #36 (backtest sur les mutations `trouve`, verite
-terrain gratuite) les remplace par des valeurs calibrees sur la courbe
-exactitude x confiance. Ils sont ici des constantes nommees, au meme titre que
+Les trois seuils sont calibres par #36 (backtest sur les mutations `trouve`, verite
+terrain gratuite) : voir `data/jev/backtest_report.md` et la note au-dessus de
+`SCORE_MIN`. Ils sont ici des constantes nommees, au meme titre que
 `DISTANCE_THRESHOLD_M` et `SURFACE_TOLERANCE_M2` -- jamais un nombre en dur dans
 un appel.
 """
@@ -62,9 +62,22 @@ QUESTIONS_VERSION = "v1"
 # se degrade avec la longueur de liste, pas un filtre actif au cas general.
 MAX_CANDIDATES = 8
 
-# --- Seuils de decision (PROVISOIRES -- calibres par le backtest #36) ---
+# --- Seuils de decision (calibres par le backtest #36, data/jev/backtest_report.md) ---
 # Le `Score` rend une position sur l'echelle des niveaux, de 0 au niveau le plus
 # haut : avec trois niveaux, un score dans [0, 2].
+#
+# Le backtest (400 mutations `trouve` rejouees reponse masquee) mesure que le regime
+# multi-candidats -- la SEULE population qu'`04c_jev_disambiguate.py` soumet
+# reellement a Jev, un pool `ambigu` ayant toujours >= 2 candidats -- ne peut pas
+# etre resolu de facon fiable a partir du seul texte d'adresse : exactitude top-1
+# 30 % (n=200), score/confiance/marge NE discriminent PAS le bon candidat du
+# mauvais (score moyen quasi identique sur les cas corrects et faux), et la marge
+# reste < 0,25 sur 200/200 cas. Aucune fenetre de seuils ne rend une resolution
+# automatique a la fois utile et sure sur cette population -- MARGE_MIN = 0.5
+# bloque deja, de fait, toute resolution du regime multi, ce qui est le
+# comportement CORRECT au vu de la mesure, pas un defaut a corriger. Ils restent
+# donc inchanges : la valeur du backtest est d'avoir remplace une hypothese par une
+# mesure, pas d'avoir change les nombres.
 SCORE_MIN = 1.5
 MARGE_MIN = 0.5
 CONFIANCE_MIN = 0.5
@@ -248,6 +261,28 @@ def _undecided(entry_status: str, motif: str, score: float, marge: float, conf: 
     return JevVerdict(entry_status, None, motif, score, marge, conf)
 
 
+def best_candidate(answers: dict, candidats: list[dict]) -> tuple[int | None, float, float, float]:
+    """Meilleur candidat + (score, marge, confiance), AVANT tout seuil de decision.
+
+    Factorise hors de `decide` pour le backtest (#36) : la courbe exactitude x
+    confiance a besoin de savoir, pour CHAQUE cas, quel candidat Jev prefere et avec
+    quelle marge/confiance -- y compris quand aucun seuil n'est encore choisi. `decide`
+    applique les trois garde-fous par-dessus ce meme calcul ; les deux ne peuvent pas
+    diverger puisque `decide` appelle cette fonction.
+
+    Rend `(None, 0.0, 0.0, 0.0)` sur un pool vide -- rien a departager.
+    """
+    if not candidats:
+        return None, 0.0, 0.0, 0.0
+    scores = [_score_of(answers, i) for i in range(len(candidats))]
+    best = max(range(len(scores)), key=lambda i: scores[i])
+    others = [s for i, s in enumerate(scores) if i != best]
+    score = scores[best]
+    marge = score - (max(others) if others else 0.0)
+    confiance = _confidence_of(answers, best)
+    return best, score, marge, confiance
+
+
 def decide(
     answers: dict,
     candidats: list[dict],
@@ -276,12 +311,7 @@ def decide(
     if not candidats:
         return _undecided(entry_status, "pool_vide", 0.0, 0.0, 0.0)
 
-    scores = [_score_of(answers, i) for i in range(len(candidats))]
-    best = max(range(len(scores)), key=lambda i: scores[i])
-    others = [s for i, s in enumerate(scores) if i != best]
-    score = scores[best]
-    marge = score - (max(others) if others else 0.0)
-    confiance = _confidence_of(answers, best)
+    best, score, marge, confiance = best_candidate(answers, candidats)
 
     if score < score_min:
         return _undecided(entry_status, "score_insuffisant", score, marge, confiance)

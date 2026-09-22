@@ -257,6 +257,11 @@ def judge_cases(
     Idempotent : une cle deja au cache n'entraine aucun appel. Un pool vide n'est
     jamais envoye (rien a juger, et la requete serait payante pour rien). `ask=None`
     (pas de cle API) sert le cache et laisse le reste en l'etat, motif `sans_cle`.
+
+    Sequentiel volontairement : `pipeline/jev_backtest.py` (#36) parallelise ses
+    propres appels reseau avec sa propre gestion du cache -- voir sa docstring pour
+    pourquoi cette concurrence n'a pas sa place ici (le seul appelant de production,
+    `04c_jev_disambiguate.py`, reste sequentiel).
     """
     verdicts: list[JevVerdict] = []
     appels = servis = tokens_total = 0
