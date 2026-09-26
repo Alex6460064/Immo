@@ -115,6 +115,7 @@ TEMPORAL_GAP_NOTE = (
 
 _MARCHE_COLUMNS = ["commune", "annee", "type_local", "n", "moyenne", "mediane"]
 _IRIS_COLUMNS = ["code_iris", "nom_iris", "type_local", "n", "moyenne", "mediane"]
+_IRIS_ANNEE_COLUMNS = ["code_iris", "nom_iris", "annee", "type_local", "n", "moyenne"]
 # Source unique : `pipeline.lib.publish_dashboard` (l'instantane #24 ne publie
 # que ces colonnes -- la liste ne peut pas deriver entre les deux).
 _MATCHED_COLUMNS = list(DASHBOARD_MATCHED_COLUMNS)
@@ -466,6 +467,10 @@ def load_agg_marche(path: str | Path = AGG_MARCHE_PATH) -> list[dict]:
 
 def load_agg_iris(path: str | Path = AGG_IRIS_PATH) -> list[dict]:
     return read_parquet_rows(path, _IRIS_COLUMNS)
+
+
+def load_agg_iris_annee(path: str | Path) -> list[dict]:
+    return read_parquet_rows(path, _IRIS_ANNEE_COLUMNS)
 
 
 def load_matched(path: str | Path = MATCHED_PATH) -> list[dict]:

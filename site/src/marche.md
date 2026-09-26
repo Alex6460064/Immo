@@ -13,7 +13,7 @@ import {segment, liste, periode, pastilles} from "./components/ui.js";
 <p class="chapeau">Ventes officielles DVF (DGFiP). Le prix au m² est calculé pour chaque vente, prix total divisé par la surface habitable totale, puis résumé par année. La courbe noire réunit les ${communes.length} communes ; ajoutez des communes pour les comparer.</p>
 
 ```js
-const choixStat = segment(["mediane", "moyenne"], {label: "Statistique", format: (d) => (d === "mediane" ? "Médiane" : "Moyenne")});
+const choixStat = segment(["moyenne", "mediane"], {label: "Statistique", format: (d) => (d === "mediane" ? "Médiane" : "Moyenne")});
 const choixType = segment([...types, "Les deux"], {label: "Type de bien"});
 const choixPeriode = periode(annees);
 const choixCommunes = pastilles(communes.map((c) => c.dvf_nom), {
@@ -52,12 +52,12 @@ const totalVentes = typesAffiches.reduce((s, t) => s + serieGlobale(t, lo, hi).r
 <figure class="graphe">
   ${series.length > 1 ? legendeSeries(series) : ""}
   ${series.length ? resize((width) => courbePrix(series, {width, stat})) : html`<p class="vide">Aucune vente pour cette sélection.</p>`}
-  <figcaption>${nombre(totalVentes)} ventes sur la période, toutes communes${deux ? " ; trait plein : appartements, tirets : maisons" : ""}. Survolez un point pour l'effectif ; sous ${EFFECTIF_FAIBLE} ventes, une médiane annuelle bouge beaucoup. ${annees.includes("2020") ? "L'année 2020 compte environ deux fois moins de ventes que les autres dans le fichier source ; la part des confinements et celle d'un fichier incomplet n'est pas établie ici." : ""}</figcaption>
+  <figcaption>${nombre(totalVentes)} ventes sur la période, toutes communes${deux ? " ; trait plein : appartements, tirets : maisons" : ""}. Survolez un point pour l'effectif ; sous ${EFFECTIF_FAIBLE} ventes, une valeur annuelle bouge beaucoup. ${annees.includes("2020") ? "L'année 2020 compte environ deux fois moins de ventes que les autres dans le fichier source ; la part des confinements et celle d'un fichier incomplet n'est pas établie ici." : ""}</figcaption>
 </figure>
 
 ## Prix au m² par quartier
 
-<p class="chapeau">Découpage IRIS de l'INSEE : environ 2 000 habitants par zone. Valeur cumulée sur toutes les années, pour le type de bien choisi. Une commune à zone unique apparaît d'un seul bloc.</p>
+<p class="chapeau">Découpage IRIS de l'INSEE : environ 2 000 habitants par zone. Prix moyen au m² sur la période choisie plus haut, pour le type de bien sélectionné. Une commune à zone unique apparaît d'un seul bloc.</p>
 
 ```js
 import {carteIris} from "./components/carte.js";
@@ -65,27 +65,25 @@ import {carteIris} from "./components/carte.js";
 
 ```js
 const choixTypeCarte = segment(types, {label: "Type de bien"});
-const choixStatCarte = segment(["mediane", "moyenne"], {label: "Statistique", format: (d) => (d === "mediane" ? "Médiane" : "Moyenne")});
 const choixZoom = liste([null, ...communes.map((c) => c.code_insee)], {
   label: "Centrer sur",
   format: (v) => (v == null ? `Les ${communes.length} communes` : communes.find((c) => c.code_insee === v).nom)
 });
 const typeCarte = Generators.input(choixTypeCarte);
-const statCarte = Generators.input(choixStatCarte);
 const zoom = Generators.input(choixZoom);
 const carte = carteIris(contours, invalidation);
 ```
 
-<div class="filtres">${choixTypeCarte}${choixStatCarte}${choixZoom}</div>
+<div class="filtres">${choixTypeCarte}${choixZoom}</div>
 
 ```js
-carte.mettreAJour(irisValeurs(typeCarte, statCarte), zoom);
+carte.mettreAJour(irisValeurs(typeCarte, lo, hi), zoom);
 ```
 
 <figure class="graphe">
   ${carte.element}
   ${carte.legende}
-  <figcaption>Couleurs par classes d'effectifs égaux (quantiles) : chaque teinte regroupe le même nombre de quartiers, pour que les écarts restent lisibles hors du front de mer. Le filtre de période ne s'applique pas à la carte.</figcaption>
+  <figcaption>Couleurs par classes d'effectifs égaux (quantiles) : chaque teinte regroupe le même nombre de quartiers, pour que les écarts restent lisibles hors du front de mer. Période : ${lo === hi ? lo : `${lo}–${hi}`}.</figcaption>
 </figure>
 
 <link rel="stylesheet" href="npm:maplibre-gl@4.7.1/dist/maplibre-gl.css">

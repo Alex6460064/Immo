@@ -19,9 +19,11 @@ from dashboard.site_export import (
     global_trend,
     impact_counts_by_year,
     impact_cube,
+    iris_year_sums,
     label_ladder,
     year_ranges,
 )
+from pipeline.lib.aggregate import aggregate_by
 
 
 def _row(commune, date, type_local, etiquette, status, prix, surface, dispo="000001"):
@@ -192,9 +194,9 @@ class TestCommuneTable:
     def test_latest_year_and_five_year_evolution(self):
         out = commune_table(self.MARCHE, ["ANGLET"], latest="2025")
         maison = next(r for r in out if r["type_local"] == "Maison")
-        assert maison["mediane"] == 6000.0
+        assert maison["moyenne"] == 6200.0
         assert maison["n"] == 50
-        assert maison["evolution"] == pytest.approx(0.25)
+        assert maison["evolution"] == pytest.approx(0.24)
         assert (maison["annee_base"], maison["n_base"]) == ("2020", 40)
 
     def test_missing_base_year_gives_none(self):
@@ -205,4 +207,27 @@ class TestCommuneTable:
     def test_commune_without_latest_year_is_kept_with_none(self):
         out = commune_table(self.MARCHE, ["ANGLET", "BIARRITZ"], latest="2025")
         biarritz = [r for r in out if r["commune"] == "BIARRITZ"]
-        assert biarritz and all(r["mediane"] is None for r in biarritz)
+        assert biarritz and all(r["moyenne"] is None for r in biarritz)
+
+
+class TestIrisYearSums:
+    """Carte IRIS filtrable par periode : une ligne par IRIS x annee x type avec
+    `n` et `somme` ; le site additionne sur la plage -> moyenne exacte."""
+
+    POINTS = [
+        {
+            "code_iris": "640240101",
+            "nom_iris": "A",
+            "annee": a,
+            "type_local": "Maison",
+            "prix_m2": v,
+        }
+        for a, v in [("2023", 4000.0), ("2023", 5000.0), ("2024", 6000.0), ("2025", 9000.0)]
+    ]
+
+    def test_range_sum_gives_exact_mean(self):
+        per_year = aggregate_by(self.POINTS, ["code_iris", "nom_iris", "annee", "type_local"])
+        out = iris_year_sums(per_year)
+        plage = [r for r in out if "2023" <= r["annee"] <= "2024"]
+        assert sum(r["somme"] for r in plage) / sum(r["n"] for r in plage) == pytest.approx(5000.0)
+        assert set(out[0]) == {"code_iris", "nom_iris", "annee", "type_local", "n", "somme"}

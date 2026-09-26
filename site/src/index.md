@@ -23,12 +23,12 @@ const premiere = annees[0];
 const derniere = annees[annees.length - 1];
 const evo = (t) => {
   const s = serieGlobale(t, premiere, derniere);
-  return s.length > 1 ? s[s.length - 1].mediane / s[0].mediane - 1 : null;
+  return s.length > 1 ? s[s.length - 1].moyenne / s[0].moyenne - 1 : null;
 };
 const certaine = meta.appariement.etiquette_certaine;
 const ecartF = (() => {
   const c = communes.find((d) => d.nom === "Bayonne");
-  const par = new Map(echelle(c.dvf_nom, "Appartement").map((d) => [d.etiquette_dpe, d.mediane]));
+  const par = new Map(echelle(c.dvf_nom, "Appartement").map((d) => [d.etiquette_dpe, d.moyenne]));
   const r = par.get("F") / par.get("C") - 1;
   return {nom: c.nom, texte: isFinite(r) ? `${Math.abs(Math.round(r * 100))} % ${r < 0 ? "moins cher" : "plus cher"}` : "à un prix non comparable"};
 })();
@@ -49,17 +49,17 @@ Ce n'est pas que l'étiquette ne compte pas. Les logements F et G sont surtout d
 
 </div>
 <div class="echelle">
-  <p class="echelle-titre">Prix médian au m² selon l'étiquette DPE</p>
+  <p class="echelle-titre">Prix moyen au m² selon l'étiquette DPE</p>
   <p class="echelle-sous-titre">Ventes depuis juillet 2021, rapprochées d'un diagnostic certain</p>
   <div class="filtres">${choixType}${choixTerritoire}</div>
   ${echelleDPE(echelle(territoire, typeBien), {})}
-  <p class="echelle-pied">Un point évidé signale moins de 30 ventes : médiane fragile.</p>
+  <p class="echelle-pied">Un point évidé signale moins de 30 ventes : moyenne fragile.</p>
 </div>
 </div>
 
 <div class="faits">
   <div><span class="fait-valeur">${nombre(meta.appariement.total)}</span><span class="fait-texte">lots vendus (lignes DVF) entre ${premiere} et ${derniere}</span></div>
-  <div><span class="fait-valeur">${evo("Appartement") == null ? "–" : `+${Math.round(evo("Appartement") * 100)} %`}</span><span class="fait-texte">prix médian au m² des appartements, ${premiere} → ${derniere}, toutes communes</span></div>
+  <div><span class="fait-valeur">${evo("Appartement") == null ? "–" : `+${Math.round(evo("Appartement") * 100)} %`}</span><span class="fait-texte">prix moyen au m² des appartements, ${premiere} → ${derniere}, toutes communes</span></div>
   <div><span class="fait-valeur">${pourcent(certaine.pct, 0)}</span><span class="fait-texte">des lots vendus rattachés à une étiquette DPE certaine (${nombre(certaine.n)})</span></div>
 </div>
 

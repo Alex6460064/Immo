@@ -9,7 +9,9 @@ data/processed/dvf_dpe_matched.parquet (04_join) et data/processed/dvf_iris.parq
     "resolu_consensus", #23) ET mutation >= juillet 2021 (voir ci-dessous). Vue
     "Impact DPE".
   - data/processed/agg_iris.parquet   : prix/m2 moyen+median par IRIS et type de
-    bien -- toutes mutations rattachees. Carte choroplethe.
+    bien -- toutes mutations rattachees. Carte choroplethe (synthese PDF).
+  - data/processed/agg_iris_annee.parquet : idem par annee -- carte du site,
+    filtrable par periode (moyenne recombinee par somme / n).
 
 La logique pure vit dans pipeline/lib/mutations.py (repli mutation + garde-fous)
 et pipeline/lib/aggregate.py (groupement) -- ce script ne fait que le cablage et
@@ -89,6 +91,7 @@ IRIS_PATH = ROOT / "data" / "processed" / "dvf_iris.parquet"
 OUT_MARCHE = ROOT / "data" / "processed" / "agg_marche.parquet"
 OUT_DPE = ROOT / "data" / "processed" / "agg_dpe.parquet"
 OUT_IRIS = ROOT / "data" / "processed" / "agg_iris.parquet"
+OUT_IRIS_ANNEE = ROOT / "data" / "processed" / "agg_iris_annee.parquet"
 
 # Colonnes lues en plus des dimensions d'agregat : la cle mutation (#26) a besoin
 # de code_insee / no_disposition / prix, la regle A de nature_mutation.
@@ -148,9 +151,11 @@ def main() -> None:
             print(f"  Lancer d'abord : python pipeline/{prev}", file=sys.stderr)
             sys.exit(1)
 
-    if all(p.exists() and p.stat().st_size > 0 for p in (OUT_MARCHE, OUT_DPE, OUT_IRIS)):
+    if all(
+        p.exists() and p.stat().st_size > 0 for p in (OUT_MARCHE, OUT_DPE, OUT_IRIS, OUT_IRIS_ANNEE)
+    ):
         print(
-            "[05_aggregate] Les 3 tables d'agregats existent deja -- calcul saute "
+            "[05_aggregate] Les 4 tables d'agregats existent deja -- calcul saute "
             "(idempotent). Supprimer les fichiers agg_*.parquet pour forcer un re-run."
         )
         return
@@ -169,6 +174,7 @@ def main() -> None:
     iris_points = [p for p in iris_points_all if p.get("code_iris") is not None]
     iris_hors_perimetre = len(iris_points_all) - len(iris_points)
     agg_iris = aggregate_by(iris_points, ["code_iris", "nom_iris", "type_local"])
+    agg_iris_annee = aggregate_by(iris_points, ["code_iris", "nom_iris", "annee", "type_local"])
 
     # agg_dpe : un point par (mutation, etiquette) -- filtre etiquette certaine
     # + mutation post-reforme, plus les comptages du rapport (impact_dpe_slice,
@@ -179,6 +185,9 @@ def main() -> None:
     write_parquet_rows(agg_marche, _agg_types("commune", "annee", "type_local"), OUT_MARCHE)
     write_parquet_rows(agg_dpe, _agg_types("etiquette_dpe", "type_local"), OUT_DPE)
     write_parquet_rows(agg_iris, _agg_types("code_iris", "nom_iris", "type_local"), OUT_IRIS)
+    write_parquet_rows(
+        agg_iris_annee, _agg_types("code_iris", "nom_iris", "annee", "type_local"), OUT_IRIS_ANNEE
+    )
 
     print("=== Rapport agregation (T12 / #13 ; #23 ; repli mutation #26 / ADR 0006) ===")
     print(f"  Lignes-lots lues (matched)                   : {len(matched)}")
@@ -202,6 +211,11 @@ def main() -> None:
     _print_table("agg_dpe (etiquette / type)", agg_dpe, ["etiquette_dpe", "type_local"], preview=16)
     _print_table(
         "agg_iris (code_iris / nom / type)", agg_iris, ["code_iris", "nom_iris", "type_local"]
+    )
+    _print_table(
+        "agg_iris_annee (code_iris / annee / type)",
+        agg_iris_annee,
+        ["code_iris", "annee", "type_local"],
     )
 
     if not agg_marche or not agg_dpe or not agg_iris:

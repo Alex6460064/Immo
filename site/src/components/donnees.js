@@ -30,7 +30,7 @@ export const pourcent = (v, d = 0) =>
 export const evolution = (v) =>
   v == null ? "–" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v * 100).toLocaleString("fr-FR", {maximumFractionDigits: 0})} %`;
 
-/** Seuil sous lequel une médiane est signalée comme fragile (effectif faible). */
+/** Seuil sous lequel une valeur (moyenne ou médiane) est signalée comme fragile (effectif faible). */
 export const EFFECTIF_FAIBLE = 30;
 
 // ---------- Marché ----------
@@ -77,11 +77,21 @@ export const echelle = (dvf, type) =>
   impact.echelle.filter((d) => d.commune === (dvf ?? null) && d.type_local === type);
 
 // ---------- Carte IRIS ----------
-/** Une valeur par IRIS pour le type et la statistique choisis (même filtre que iris_map_values). */
-export const irisValeurs = (type, stat) =>
-  iris
-    .filter((d) => d.type_local === type && d.code_iris != null && d[stat] != null)
-    .map((d) => ({code_iris: d.code_iris, nom_iris: d.nom_iris, valeur: d[stat], n: d.n}));
+/**
+ * Prix/m² moyen par IRIS sur une plage d'années : somme des prix/m² ÷ nombre de
+ * ventes, les deux additifs par année (iris_year_sums, testé côté Python).
+ */
+export function irisValeurs(type, lo, hi) {
+  const par = new Map();
+  for (const d of iris) {
+    if (d.type_local !== type || !dans(d.annee, lo, hi)) continue;
+    const z = par.get(d.code_iris) ?? {code_iris: d.code_iris, nom_iris: d.nom_iris, somme: 0, n: 0};
+    z.somme += d.somme;
+    z.n += d.n;
+    par.set(d.code_iris, z);
+  }
+  return [...par.values()].map(({somme, ...z}) => ({...z, valeur: somme / z.n}));
+}
 
 // ---------- Communes ----------
 export const tableauCommunes = communesData.tableau;

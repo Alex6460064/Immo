@@ -49,7 +49,7 @@ Chaque lot vendu reçoit l'un des quatre états. Aucun cas ambigu n'est tranché
 - **Le décalage de dates.** Une vente de 2021 peut être rapprochée d'un DPE de 2024 : l'étiquette décrit le bien, pas forcément ce que l'acheteur avait sous les yeux. D'où la restriction aux ventes postérieures à la réforme.
 - **Les ventes anciennes.** Avant juillet 2021, presque aucune vente ne trouve de diagnostic post-réforme : le taux de rapprochement est bas par construction.
 - **Les immeubles.** Environ un lot sur trois reste ambigu : dans un immeuble, plusieurs appartements partagent l'adresse et souvent la surface.
-- **Les valeurs extrêmes.** La médiane est la statistique de référence ; la moyenne est proposée mais réagit plus aux ventes exceptionnelles.
+- **Les valeurs extrêmes.** Le site affiche le prix moyen au m². La moyenne réagit davantage aux ventes exceptionnelles que la médiane, qui reste proposée en option sur la courbe de prix (page Marché) et dans l'infobulle des barres Impact DPE.
 
 ## Pour aller plus loin
 

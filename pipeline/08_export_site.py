@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SNAPSHOT = ROOT / "data" / "dashboard"
 OUT = ROOT / "site" / "src" / "data"
 
-_FLOAT_DECIMALS = {"moyenne": 1, "mediane": 1, "pct": 2}
+_FLOAT_DECIMALS = {"moyenne": 1, "mediane": 1, "pct": 2, "somme": 1}
 
 
 def _round(obj):
@@ -74,7 +74,7 @@ def _slim_geojson(geojson: dict) -> dict:
 def main() -> None:
     sources = {
         "marche": SNAPSHOT / "agg_marche.parquet",
-        "iris": SNAPSHOT / "agg_iris.parquet",
+        "iris": SNAPSHOT / "agg_iris_annee.parquet",
         "matched": SNAPSHOT / "dvf_dpe_matched.parquet",
         "geojson": SNAPSHOT / "iris_communes.geojson",
     }
@@ -86,7 +86,7 @@ def main() -> None:
         sys.exit(1)
 
     marche = data.load_agg_marche(sources["marche"])
-    iris = data.load_agg_iris(sources["iris"])
+    iris = sx.iris_year_sums(data.load_agg_iris_annee(sources["iris"]))
     matched = data.load_matched(sources["matched"])
     counts = data.load_matching_counts(sources["matched"])
     geojson = data.load_iris_geojson(sources["geojson"])
@@ -142,7 +142,7 @@ def main() -> None:
     rate = data.matching_rate(counts)
     print("=== Export du site statique (site/src/data/, #44) ===")
     print(f"  source : {SNAPSHOT} (instantane versionne)")
-    print(f"  {len(matched)} lignes appariement, {len(marche)} lignes marche, {len(iris)} IRIS")
+    print(f"  {len(matched)} lignes appariement, {len(marche)} marche, {len(iris)} IRIS x annee")
     print(
         "  appariement : " + " / ".join(f"{s['label']} {s['pct']:.1f} %" for s in rate["statuses"])
     )

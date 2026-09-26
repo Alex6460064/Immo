@@ -144,7 +144,7 @@ export function carteIris(contours, invalidation) {
       html`<span class="carte-legende-rampe">${rampe().slice(0, bornes.length + 1).map(
         (c, i) => html`<span><i style=${{background: c}}></i>${i === 0 ? `${nombre(limites[0])} €` : nombre(limites[i])}</span>`
       )}</span>`,
-      html`<span>€/m², ${bornes.length + 1} classes d'effectifs de quartiers égaux · max ${nombre(limites[limites.length - 1])} €</span>`,
+      html`<span>€/m² moyen, ${bornes.length + 1} classes d'effectifs de quartiers égaux · max ${nombre(limites[limites.length - 1])} €</span>`,
       html`<span class="carte-sans-donnee"><i></i>pas de vente de ce type</span>`
     );
   }

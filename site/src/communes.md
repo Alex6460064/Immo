@@ -20,15 +20,15 @@ const lignes = communes.map((c) => {
 
 # Les ${communes.length} communes en ${derniere}
 
-<p class="chapeau">Prix médian au m² de l'année ${derniere}, évolution depuis ${base} et part des lots vendus rattachés à une étiquette DPE certaine. Cliquez un en-tête pour trier.</p>
+<p class="chapeau">Prix moyen au m² de l'année ${derniere}, évolution depuis ${base} et part des lots vendus rattachés à une étiquette DPE certaine. Cliquez un en-tête pour trier.</p>
 
 ```js
 const colonnes = [
   {cle: "nom", titre: "Commune", val: (d) => d.nom},
-  {cle: "pa", titre: "Appart. €/m²", num: true, val: (d) => d.appart?.mediane},
+  {cle: "pa", titre: "Appart. €/m²", num: true, val: (d) => d.appart?.moyenne},
   {cle: "ea", titre: `Depuis ${base}`, num: true, val: (d) => d.appart?.evolution},
   {cle: "na", titre: "Ventes", num: true, val: (d) => d.appart?.n},
-  {cle: "pm", titre: "Maison €/m²", num: true, val: (d) => d.maison?.mediane},
+  {cle: "pm", titre: "Maison €/m²", num: true, val: (d) => d.maison?.moyenne},
   {cle: "em", titre: `Depuis ${base}`, num: true, val: (d) => d.maison?.evolution},
   {cle: "nm", titre: "Ventes", num: true, val: (d) => d.maison?.n},
   {cle: "ac", titre: "Étiquette certaine", num: true, val: (d) => d.certain}
@@ -45,16 +45,16 @@ const tries = [...lignes].sort((a, b) => {
   if (y == null) return -1;
   return (typeof x === "string" ? x.localeCompare(y, "fr") : x - y) * tri.sens;
 });
-const prix = (r) => (r?.mediane == null ? html`<span class="faible-effectif">–</span>` : html`<span class=${r.n < EFFECTIF_FAIBLE ? "faible-effectif" : ""}>${nombre(r.mediane)}</span>`);
+const prix = (r) => (r?.moyenne == null ? html`<span class="faible-effectif">–</span>` : html`<span class=${r.n < EFFECTIF_FAIBLE ? "faible-effectif" : ""}>${nombre(r.moyenne)}</span>`);
 const evo = (r) => {
   const v = r?.evolution;
   if (v == null) return html`<span class="faible-effectif">–</span>`;
-  // Une des deux médianes repose sur trop peu de ventes : évolution affichée mais grisée.
+  // Une des deux moyennes repose sur trop peu de ventes : évolution affichée mais grisée.
   const fragile = r.n < EFFECTIF_FAIBLE || r.n_base < EFFECTIF_FAIBLE;
   return html`<span class=${fragile ? "faible-effectif" : v > 0 ? "hausse" : v < 0 ? "baisse" : ""}>${evolution(v)}</span>`;
 };
 display(html`<div class="tableau-conteneur"><table class="donnees">
-  <caption class="remarque" style="caption-side:bottom;text-align:left;padding-top:.6rem">Valeurs grisées : moins de ${EFFECTIF_FAIBLE} ventes dans l'année (ou l'année de base pour l'évolution), médiane fragile. Évolution de la médiane annuelle, sans correction de la composition des ventes.</caption>
+  <caption class="remarque" style="caption-side:bottom;text-align:left;padding-top:.6rem">Valeurs grisées : moins de ${EFFECTIF_FAIBLE} ventes dans l'année (ou l'année de base pour l'évolution), moyenne fragile. Évolution de la moyenne annuelle, sans correction de la composition des ventes.</caption>
   <thead><tr>${colonnes.map(
     (c) => html`<th scope="col" class=${c.num ? "num" : ""} aria-sort=${tri.cle === c.cle ? (tri.sens > 0 ? "ascending" : "descending") : null}><button type="button" onclick=${() => trier(c.cle)}>${c.titre}<span aria-hidden="true">${tri.cle === c.cle ? (tri.sens > 0 ? "↑" : "↓") : ""}</span></button></th>`
   )}</tr></thead>

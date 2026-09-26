@@ -45,7 +45,11 @@ DASHBOARD_MATCHED_COLUMNS: tuple[str, ...] = (
 MATCHED_NAME = "dvf_dpe_matched.parquet"
 IRIS_GEOJSON_NAME = "iris_communes.geojson"
 # Agregats copies tels quels (deja < 15 Ko, cf. issue #24).
-COPIED_AGGREGATES: tuple[str, ...] = ("agg_marche.parquet", "agg_iris.parquet")
+COPIED_AGGREGATES: tuple[str, ...] = (
+    "agg_marche.parquet",
+    "agg_iris.parquet",
+    "agg_iris_annee.parquet",
+)
 
 
 def _sql_literal(path: Path) -> str:

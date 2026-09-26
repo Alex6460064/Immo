@@ -81,7 +81,7 @@ export function legendeSeries(series) {
   )}</div>`;
 }
 
-/** Barres prix/m² médian par regroupement d'étiquette (et par type si deux types). */
+/** Barres prix/m² moyen par regroupement d'étiquette (et par type si deux types). */
 export function barresImpact(lignes, {width, types}) {
   const deuxTypes = types.length > 1;
   const donnees = lignes.map((d) => ({...d, faible: d.n < EFFECTIF_FAIBLE}));
@@ -97,14 +97,14 @@ export function barresImpact(lignes, {width, types}) {
     x: deuxTypes
       ? {domain: types, label: null, axis: "bottom", tickSize: 0, padding: 0.12, tickFormat: (t) => (t === "Appartement" ? "Appart." : t)}
       : {label: "Regroupement d'étiquette DPE", padding: 0.3, tickSize: 0},
-    y: {label: "Prix au m², médiane", grid: true, tickFormat: formatAxeEuros, nice: true},
+    y: {label: "Prix au m², moyenne", grid: true, tickFormat: formatAxeEuros, nice: true},
     style: {color: "var(--encre-2)"},
     marks: [
       Plot.gridY({stroke: "var(--grille)", strokeOpacity: 1}),
       Plot.barY(donnees, {
         fx: deuxTypes ? "groupe" : undefined,
         x: deuxTypes ? "type_local" : "groupe",
-        y: "mediane",
+        y: "moyenne",
         fill: (d) => COULEUR_GROUPE[d.groupe],
         fillOpacity: (d) => (d.faible ? 0.45 : 1),
         rx: 4,
@@ -115,8 +115,8 @@ export function barresImpact(lignes, {width, types}) {
       Plot.text(donnees, {
         fx: deuxTypes ? "groupe" : undefined,
         x: deuxTypes ? "type_local" : "groupe",
-        y: "mediane",
-        text: (d) => nombre(d.mediane),
+        y: "moyenne",
+        text: (d) => nombre(d.moyenne),
         dy: -9,
         fill: "var(--encre)",
         fontWeight: 700
@@ -126,19 +126,19 @@ export function barresImpact(lignes, {width, types}) {
         Plot.pointerX({
           fx: deuxTypes ? "groupe" : undefined,
           x: deuxTypes ? "type_local" : "groupe",
-          y: "mediane",
+          y: "moyenne",
           title: (d) =>
-            `${d.groupe} · ${d.type_local}\nMédiane ${euros(d.mediane)}\nMoyenne ${euros(d.moyenne)}\n${nombre(d.n)} ventes${d.faible ? " (effectif faible)" : ""}`
+            `${d.groupe} · ${d.type_local}\nMoyenne ${euros(d.moyenne)}\nMédiane ${euros(d.mediane)}\n${nombre(d.n)} ventes${d.faible ? " (effectif faible)" : ""}`
         })
       )
     ]
   });
 }
 
-/** Étiquette énergie : une flèche par étiquette, prix médian sur une échelle commune. */
+/** Étiquette énergie : une flèche par étiquette, prix moyen sur une échelle commune. */
 export function echelleDPE(lignes, {reference}) {
   const par = new Map(lignes.map((d) => [d.etiquette_dpe, d]));
-  const valeurs = lignes.map((d) => d.mediane);
+  const valeurs = lignes.map((d) => d.moyenne);
   if (!valeurs.length) return html`<p class="vide">Aucune vente appariée pour cette sélection.</p>`;
   const pas = 500;
   const min = Math.floor((Math.min(...valeurs, reference ?? Infinity) * 0.97) / pas) * pas;
@@ -147,12 +147,12 @@ export function echelleDPE(lignes, {reference}) {
   return html`<div class="echelle-lignes" role="list">${"ABCDEFG".split("").map((l, i) => {
     const d = par.get(l);
     const faible = d && d.n < EFFECTIF_FAIBLE;
-    const label = d ? `Étiquette ${l} : ${euros(d.mediane)}, ${nombre(d.n)} ventes` : `Étiquette ${l} : aucune vente`;
+    const label = d ? `Étiquette ${l} : ${euros(d.moyenne)}, ${nombre(d.n)} ventes` : `Étiquette ${l} : aucune vente`;
     return html.fragment`<div class=${`fleche${ETIQUETTES_CLAIRES.has(l) ? " claire" : ""}`} style=${{background: COULEUR_DPE[l], width: `${52 + i * 8}%`}} role="listitem" aria-label=${label}>${l}</div>
       <div class="echelle-piste" aria-hidden="true">${reference != null ? html`<span class="echelle-ref" style=${{left: pos(reference)}}></span>` : null}${
-        d ? html`<span class=${`echelle-point${faible ? " faible" : ""}`} style=${{left: pos(d.mediane)}}></span>` : null
+        d ? html`<span class=${`echelle-point${faible ? " faible" : ""}`} style=${{left: pos(d.moyenne)}}></span>` : null
       }</div>
-      <div class="echelle-valeur" aria-hidden="true">${d ? euros(d.mediane) : "–"}<small>${d ? `${nombre(d.n)} ventes` : "aucune vente"}</small></div>`;
+      <div class="echelle-valeur" aria-hidden="true">${d ? euros(d.moyenne) : "–"}<small>${d ? `${nombre(d.n)} ventes` : "aucune vente"}</small></div>`;
   })}<div></div><div class="echelle-axe" aria-hidden="true"><span>${nombre(min)} €</span><span>${nombre(max)} €</span></div><div></div></div>`;
 }
 

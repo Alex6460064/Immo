@@ -106,6 +106,24 @@ def impact_counts_by_year(
     return out
 
 
+def iris_year_sums(per_year_rows: Sequence[dict]) -> list[dict]:
+    """Lignes `agg_iris_annee` (IRIS x annee x type) -> `n` + `somme` des prix/m2.
+    Les sommes s'additionnent sur des annees disjointes : le site obtient la
+    moyenne exacte d'une plage par somme / n, sans recalcul statistique."""
+    return [
+        {
+            "code_iris": r["code_iris"],
+            "nom_iris": r.get("nom_iris"),
+            "annee": r["annee"],
+            "type_local": r["type_local"],
+            "n": int(r["n"]),
+            "somme": r["moyenne"] * r["n"],
+        }
+        for r in per_year_rows
+        if r.get("code_iris") is not None and r.get("moyenne") is not None
+    ]
+
+
 def global_trend(matched_rows: Sequence[dict], types: Sequence[str]) -> list[dict]:
     """Courbe de reference « toutes communes » (`market_trend_global`) par type."""
     return [
@@ -136,8 +154,8 @@ def commune_matching(matched_rows: Sequence[dict]) -> list[dict]:
 def commune_table(
     marche_rows: Sequence[dict], communes: Sequence[str], *, latest: str, recul: int = 5
 ) -> list[dict]:
-    """Une ligne par commune x type : mediane / n de l'annee `latest` et
-    `evolution` de la mediane depuis `annee_base` = `latest - recul` (None si une
+    """Une ligne par commune x type : moyenne / mediane / n de l'annee `latest` et
+    `evolution` de la moyenne depuis `annee_base` = `latest - recul` (None si une
     des deux annees manque).
     Commune sans vente l'annee `latest` : conservee, valeurs None (jamais
     supprimee en silence)."""
@@ -149,8 +167,8 @@ def commune_table(
             cur = by.get((commune, t, latest))
             old = by.get((commune, t, base))
             evo = None
-            if cur and old and old["mediane"]:
-                evo = cur["mediane"] / old["mediane"] - 1
+            if cur and old and old["moyenne"]:
+                evo = cur["moyenne"] / old["moyenne"] - 1
             out.append(
                 {
                     "commune": commune,

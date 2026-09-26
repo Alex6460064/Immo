@@ -44,7 +44,7 @@ const compo = impactComptages(commune, typeFiltre, groupe, lo, hi);
 display(avertissement(html`<p>${meta.note_decalage}</p>`));
 ```
 
-<h2 style="margin-top:1.5rem">${nom} : prix médian au m² par groupe d'étiquettes</h2>
+<h2 style="margin-top:1.5rem">${nom} : prix moyen au m² par groupe d'étiquettes</h2>
 
 <figure class="graphe">
   ${lignes.length ? resize((width) => barresImpact(lignes, {width, types: typesAffiches})) : html`<p class="vide">Aucune vente rapprochée d'un DPE après la réforme pour cette sélection. Élargissez la période ou choisissez « Tous » les types.</p>`}
@@ -63,7 +63,7 @@ const typeEchelle = Generators.input(choixTypeEchelle);
 <div class="echelle" style="max-width:640px">
   <div class="filtres">${choixTypeEchelle}</div>
   ${echelleDPE(echelle(commune, typeEchelle), {})}
-  <p class="echelle-pied">Un point évidé signale moins de 30 ventes : médiane fragile.</p>
+  <p class="echelle-pied">Un point évidé signale moins de 30 ventes : moyenne fragile.</p>
 </div>
 
 ## Rapprochement dans cette commune
