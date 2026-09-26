@@ -1,9 +1,9 @@
 """Construit l'instantane de donnees du dashboard (`data/dashboard/`, issue #24)
 depuis les sorties du pipeline (`data/processed/` + `data/raw/iris_communes.geojson`).
 
-Pourquoi un instantane versionne : le deploiement Streamlit Community Cloud (#25)
-deploie le repo sans executer le pipeline -- le dashboard doit pouvoir lire ses
-donnees sur un clone frais. `pipeline/06_publish_dashboard_data.py` est le seul
+Pourquoi un instantane versionne : la CI GitHub Pages (#44) construit le site
+statique sans executer le pipeline -- le site doit pouvoir lire ses donnees sur un
+clone frais. `pipeline/06_publish_dashboard_data.py` est le seul
 producteur de ce dossier ; il n'est jamais edite a la main.
 
 Idempotent : deux executions successives sur les memes entrees (et meme version

@@ -320,3 +320,30 @@ quand il est bas (< 0,5) elle monte à **0,57**. Jev est sûr pour **rejeter**, 
 utile en **D2** (repli sur `non_trouve` — confirmer/rejeter *un* candidat) qu'en **D1**
 (départager *entre* candidats quasi identiques). Un taux faible reste publiable : il dirait
 que la normalisation d'adresse détruit plus d'information qu'elle n'en laisse.
+
+## 2026-09-26 — Site statique Observable Framework, fin de Streamlit (#44)
+
+Le dashboard Streamlit est remplacé par un site statique (`site/`, Observable Framework)
+publié sur GitHub Pages, sur le modèle du projet jumeau (observatoire économique). Streamlit,
+Plotly et `requirements.txt` (manifeste Cloud, cf. #25) sont retirés.
+
+- **Aucun calcul statistique en JS.** `pipeline/08_export_site.py` lit `data/dashboard/` et
+  écrit des cubes JSON via `dashboard/site_export.py`, qui appelle les fonctions déjà testées de
+  `dashboard/data.py`. Les tests comparent cube et seam sélection par sélection.
+- **Impact DPE** : les médianes ne s'additionnent pas, d'où un agrégat par plage d'années
+  [min, max]. Seules les plages commençant à partir de l'année de réforme sont exportées :
+  aucun point Impact DPE n'est antérieur au cutoff, donc [2016, 2023] ≡ [2021, 2023]
+  (`cube_start_year`, testé). Les comptages (retenues / consensus / pré-réforme exclus) sont
+  exportés par année et sommés côté site (additifs sur des années disjointes, testé).
+- **Tableau des communes** : évolution de la médiane sur toute la période (2016 → dernière
+  année), pas sur 5 ans — la base à 5 ans tomberait sur 2020, année à volume anormalement bas
+  dans le fichier source (≈ moitié des autres années, cause non établie).
+- **Unité des taux d'appariement** : `load_matching_counts` compte les lignes de
+  `dvf_dpe_matched` (56 929), pas les mutations (≈ 48 000 clés distinctes), et ces lignes
+  incluent ~4 300 locaux commerciaux. L'ancien dashboard les appelait « mutations ». Le site
+  les nomme « lots » ; aligner la métrique sur la mutation (CONTEXT.md) est un sujet à part.
+- **Carte** : MapLibre GL JS 4.7 (build UMD, worker intégré). La v6 ESM charge son worker dans
+  un fichier séparé que le CDN du build ne résout pas (« Worker failed to load »). Classes par
+  quantiles (7 paliers), rampe inversée en thème sombre.
+- **#43** (filtre en langage naturel via Jev) supposait une clé API côté serveur Streamlit :
+  un site statique n'a pas de secret, le ticket est à recadrer.

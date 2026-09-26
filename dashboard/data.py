@@ -4,8 +4,9 @@
 Les sources sont lues depuis `data/processed/` + `data/raw/` si le pipeline a
 tourne localement (les 4 fichiers presents), sinon toutes depuis l'instantane
 versionne `data/dashboard/` (issue #24, `_resolve_sources()` -- tout ou rien,
-jamais un melange de millesimes). C'est ce qui permet `streamlit run` sur un
-clone frais et le deploiement Cloud (#25).
+jamais un melange de millesimes). L'export du site statique
+(`pipeline/08_export_site.py`, #44) passe explicitement les chemins de
+l'instantane, pour qu'un clone frais et la CI produisent le meme site.
 
 Sources (produites par le pipeline) :
   - `agg_marche.parquet` (05_aggregate) : prix/m2 par commune / annee / type de
@@ -27,8 +28,8 @@ filtre de la selection UI est passe en `keep` a `impact_dpe_slice` ; sans filtre
 commune/periode, le resultat est exactement `agg_dpe.parquet` (au regroupement
 d'etiquette pres). Voir NOTES.md et issue #28.
 
-Pas d'import Streamlit ici : le cache (`@st.cache_data`) et l'UI vivent dans
-`dashboard/app.py`.
+Aucune UI ici : `dashboard/site_export.py` precalcule les cubes du site
+statique (`site/`, #44) en appelant ces fonctions.
 """
 
 from __future__ import annotations

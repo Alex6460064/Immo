@@ -6,8 +6,6 @@ requires-python = ">=3.12"
 dependencies = [
     "duckdb>=1.5.5",
     "shapely>=2.0",
-    "streamlit>=1.40",
-    "plotly>=5.24",
 ]
 
 [dependency-groups]
@@ -16,7 +14,7 @@ dev = [
     "ruff>=0.16.4",
 ]
 # Genere la synthese PDF (pipeline/07_report.py) uniquement -- hors chemin de
-# deploiement (dashboard Cloud) et hors CI (aucun test n'importe 07_report).
+# deploiement (site statique) et hors CI (aucun test n'importe 07_report).
 # Groupe non-defaut : `uv sync --group report` pour l'installer.
 # typst : moteur de mise en page + graphes (lilaq). Le paquet pip embarque le
 # binaire et les polices -> pas d'install systeme. Version epinglee = PDF

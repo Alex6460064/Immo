@@ -1,0 +1,949 @@
+@import url("observablehq:default.css");
+
+/*
+ * Direction : l'étiquette énergie comme langage visuel. Les sept couleurs officielles
+ * du DPE (A → G) sont le seul élément coloré fort du site ; tout le reste est une
+ * encre ardoise sur un papier « brume atlantique ». Les données de marché (courbes,
+ * carte) restent en bleu océan pour ne jamais se confondre avec une étiquette.
+ * Le mode suit le système, sauf choix explicite (data-theme, bouton de l'en-tête).
+ */
+:root {
+  --papier: #f3f6f7;
+  --surface: #ffffff;
+  --surface-2: #e8eef1;
+  --encre: #13212b;
+  --encre-2: #4a5a66;
+  --encre-3: #71818c;
+  --trait: #d6dfe4;
+  --ocean: #1c5cab;
+  --ocean-clair: #86b6ef;
+  --accent: #b3262d;
+  --grille: rgba(74, 90, 102, 0.16);
+
+  /* Séries catégorielles (communes comparées) : ordre fixe validé CVD (skill dataviz). */
+  --serie-1: #2a78d6;
+  --serie-2: #eb6834;
+  --serie-3: #1baf7a;
+  --serie-4: #eda100;
+  --serie-5: #e87ba4;
+
+  /* 4 états d'appariement. */
+  --etat-trouve: #1f6b4f;
+  --etat-consensus: #4fae84;
+  --etat-non-trouve: #cfd8dd;
+  --etat-ambigu: #c98500;
+
+  --rayon: 6px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --papier: #0e171e;
+    --surface: #15222b;
+    --surface-2: #1c2b35;
+    --encre: #e4ecf0;
+    --encre-2: #a3b4bf;
+    --encre-3: #7b8e9a;
+    --trait: #29404c;
+    --ocean: #6da7ec;
+    --ocean-clair: #1c5cab;
+    --accent: #e0565c;
+    --grille: rgba(163, 180, 191, 0.14);
+    --serie-1: #3987e5;
+    --serie-2: #d95926;
+    --serie-3: #199e70;
+    --serie-4: #c98500;
+    --serie-5: #d55181;
+    --etat-trouve: #5cc096;
+    --etat-consensus: #23835f;
+    --etat-non-trouve: #34444e;
+    --etat-ambigu: #e0a526;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --papier: #0e171e;
+  --surface: #15222b;
+  --surface-2: #1c2b35;
+  --encre: #e4ecf0;
+  --encre-2: #a3b4bf;
+  --encre-3: #7b8e9a;
+  --trait: #29404c;
+  --ocean: #6da7ec;
+  --ocean-clair: #1c5cab;
+  --accent: #e0565c;
+  --grille: rgba(163, 180, 191, 0.14);
+  --serie-1: #3987e5;
+  --serie-2: #d95926;
+  --serie-3: #199e70;
+  --serie-4: #c98500;
+  --serie-5: #d55181;
+  --etat-trouve: #5cc096;
+  --etat-consensus: #23835f;
+  --etat-non-trouve: #34444e;
+  --etat-ambigu: #e0a526;
+  color-scheme: dark;
+}
+
+/* Couleurs officielles de l'étiquette DPE : identiques dans les deux thèmes (c'est une norme). */
+:root {
+  --dpe-A: #009c6d;
+  --dpe-B: #52b153;
+  --dpe-C: #a5cc74;
+  --dpe-D: #f4e70f;
+  --dpe-E: #f0b40f;
+  --dpe-F: #eb8235;
+  --dpe-G: #d7221f;
+}
+
+/* Variables attendues par Observable Framework. */
+:root {
+  --theme-foreground: var(--encre);
+  --theme-foreground-alt: var(--encre);
+  --theme-foreground-muted: var(--encre-2);
+  --theme-foreground-faint: var(--encre-3);
+  --theme-foreground-fainter: var(--trait);
+  --theme-foreground-faintest: var(--trait);
+  --theme-foreground-focus: var(--ocean);
+  --theme-background: var(--papier);
+  --theme-background-a: var(--papier);
+  --theme-background-b: var(--surface);
+  --theme-background-alt: var(--surface);
+  --sans-serif: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --display: "Bricolage Grotesque", var(--sans-serif);
+  --serif: var(--sans-serif);
+  --monospace: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --observablehq-max-width: 1160px;
+  --observablehq-header-height: 3.75rem;
+}
+
+html,
+body {
+  background: var(--papier);
+}
+body,
+#observablehq-main {
+  font-family: var(--sans-serif);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--encre);
+  -webkit-font-smoothing: antialiased;
+}
+#observablehq-main {
+  max-width: var(--observablehq-max-width);
+}
+#observablehq-main p,
+#observablehq-main li {
+  max-width: 68ch;
+}
+.num,
+table,
+.valeur {
+  font-variant-numeric: tabular-nums;
+}
+a {
+  color: var(--ocean);
+  text-underline-offset: 0.18em;
+}
+a:hover {
+  text-decoration-thickness: 2px;
+}
+:is(a, button, select, input, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--ocean);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Titres : Bricolage, serré, jamais en capitales. */
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  color: var(--encre);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+h1 {
+  font-size: clamp(2rem, 4.2vw, 3.1rem);
+  line-height: 1.04;
+  font-weight: 750;
+  max-width: 22ch;
+  margin: 2.2rem 0 1rem;
+}
+h2 {
+  font-size: 1.55rem;
+  line-height: 1.15;
+  font-weight: 700;
+  margin: 3.2rem 0 0.4rem;
+}
+h3 {
+  font-size: 1.12rem;
+  font-weight: 650;
+  margin: 1.6rem 0 0.3rem;
+}
+h1 + .chapeau {
+  margin-top: 0;
+}
+.chapeau {
+  font-size: 1.14rem;
+  line-height: 1.55;
+  color: var(--encre-2);
+  max-width: 62ch;
+}
+.remarque {
+  font-size: 0.9rem;
+  color: var(--encre-2);
+}
+
+/* En-tête : marque, rubriques, thème. */
+#observablehq-header {
+  gap: 1.75rem;
+  background: color-mix(in srgb, var(--papier) 90%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--trait);
+  font: 500 15px var(--sans-serif);
+}
+#observablehq-header a.marque {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+  color: var(--encre);
+  font: 750 17px var(--display);
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+.marque-lieu {
+  font-weight: 500;
+  color: var(--encre-2);
+}
+.marque-signe {
+  display: inline-grid;
+  gap: 2px;
+}
+.marque-signe i {
+  display: block;
+  height: 4px;
+  clip-path: polygon(0 0, calc(100% - 3px) 0, 100% 50%, calc(100% - 3px) 100%, 0 100%);
+}
+.marque-signe i:nth-child(1) {
+  width: 11px;
+  background: var(--dpe-A);
+}
+.marque-signe i:nth-child(2) {
+  width: 15px;
+  background: var(--dpe-E);
+}
+.marque-signe i:nth-child(3) {
+  width: 19px;
+  background: var(--dpe-G);
+}
+.nav-principale {
+  display: flex;
+  gap: 0.25rem;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.nav-principale a {
+  padding: 0.5rem 0.7rem;
+  color: var(--encre-2);
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.nav-principale a:hover {
+  color: var(--encre);
+}
+.nav-principale a[aria-current="page"] {
+  color: var(--encre);
+  border-bottom-color: var(--encre);
+}
+.bascule-theme {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--trait);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--encre-2);
+  cursor: pointer;
+}
+.bascule-theme:hover {
+  color: var(--encre);
+  background: var(--surface);
+}
+.bascule-theme svg {
+  width: 18px;
+  height: 18px;
+  grid-area: 1 / 1;
+}
+.icone-lune {
+  display: none;
+}
+:root[data-theme="dark"] .icone-soleil {
+  display: none;
+}
+:root[data-theme="dark"] .icone-lune {
+  display: block;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .icone-soleil {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .icone-lune {
+    display: block;
+  }
+}
+#observablehq-footer {
+  border-top: 1px solid var(--trait);
+  color: var(--encre-3);
+  font-size: 0.85rem;
+}
+
+/* ---------- Contrôles : une seule rangée au-dessus du graphique piloté ---------- */
+.filtres {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1.5rem;
+  margin: 1rem 0 1.25rem;
+}
+.filtres form,
+.filtres > * {
+  margin: 0;
+}
+/* Inputs Observable : libellé au-dessus, contrôles lisibles. */
+.filtres form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: auto;
+  max-width: 100%;
+  --label-width: auto;
+}
+.filtres form > label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--encre-2);
+  width: auto;
+  padding: 0;
+}
+.filtres select {
+  min-height: 40px;
+  padding: 0 2rem 0 0.7rem;
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon);
+  background-color: var(--surface);
+  color: var(--encre);
+  font: inherit;
+}
+
+/* Contrôle segmenté (Inputs.radio). */
+.segment > div {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--trait);
+  border-radius: calc(var(--rayon) + 3px);
+  background: var(--surface);
+}
+.segment > div > label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 0.85rem;
+  margin: 0;
+  border-radius: var(--rayon);
+  color: var(--encre-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.segment input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.segment > div > label:has(input:checked) {
+  background: var(--encre);
+  color: var(--papier);
+}
+.segment > div > label:has(input:focus-visible) {
+  outline: 2px solid var(--ocean);
+  outline-offset: 2px;
+}
+
+/* Pastilles de communes (sélection multiple, ordre de sélection conservé). */
+.pastilles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.pastilles-titre {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--encre-2);
+}
+.pastilles-liste {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.pastille {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 36px;
+  padding: 0 0.8rem;
+  border: 1px solid var(--trait);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--encre-2);
+  font: inherit;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+.pastille:hover:not(:disabled) {
+  color: var(--encre);
+  border-color: var(--encre-3);
+}
+.pastille[aria-pressed="true"] {
+  color: var(--encre);
+  border-color: var(--encre);
+}
+.pastille:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pastille-couleur {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--trait);
+}
+
+/* ---------- Figures ---------- */
+figure.graphe {
+  margin: 0 0 1rem;
+  max-width: none;
+}
+figure.graphe figcaption,
+.legende-graphe {
+  font-size: 0.88rem;
+  color: var(--encre-2);
+  margin-top: 0.5rem;
+  max-width: 72ch;
+}
+.legende-series {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+  color: var(--encre-2);
+}
+.legende-series span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.legende-series svg {
+  flex-shrink: 0;
+}
+svg[class^="plot"] {
+  --plot-background: var(--papier);
+  font-family: var(--sans-serif);
+  font-size: 12.5px;
+  overflow: visible;
+}
+[aria-label="tip"] {
+  --plot-background: var(--surface);
+}
+
+/* Encadré d'avertissement méthodologique (jamais masqué). */
+.avertissement {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.8rem;
+  padding: 0.9rem 1.1rem;
+  margin: 1.2rem 0;
+  border-left: 3px solid var(--dpe-E);
+  background: var(--surface);
+  border-radius: 0 var(--rayon) var(--rayon) 0;
+  font-size: 0.95rem;
+  color: var(--encre-2);
+  max-width: 80ch;
+}
+.avertissement svg {
+  width: 20px;
+  height: 20px;
+  color: var(--dpe-F);
+  margin-top: 2px;
+}
+.avertissement p {
+  margin: 0;
+}
+.vide {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--encre-2);
+  border: 1px dashed var(--trait);
+  border-radius: var(--rayon);
+}
+
+/* ---------- Accueil : l'étiquette énergie ---------- */
+.ouverture {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 2.5rem 3.5rem;
+  align-items: start;
+  margin-top: 1.5rem;
+}
+.ouverture h1 {
+  margin-top: 0.6rem;
+}
+.ouverture .chapeau {
+  margin-bottom: 1rem;
+}
+@media (max-width: 900px) {
+  .ouverture {
+    grid-template-columns: 1fr;
+  }
+}
+.echelle {
+  padding: 1.25rem 1.25rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+}
+.echelle-titre {
+  font: 650 1rem var(--display);
+  margin: 0 0 0.15rem;
+}
+.echelle-sous-titre {
+  font-size: 0.88rem;
+  color: var(--encre-2);
+  margin: 0 0 0.9rem;
+}
+.echelle .filtres {
+  margin: 0 0 1rem;
+}
+.echelle-lignes {
+  display: grid;
+  grid-template-columns: minmax(64px, 30%) minmax(0, 1fr) auto;
+  align-items: center;
+  row-gap: 5px;
+  column-gap: 0.9rem;
+}
+.fleche {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  padding-left: 0.6rem;
+  font: 800 1.1rem var(--display);
+  color: #fff;
+  clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 50%, calc(100% - 13px) 100%, 0 100%);
+}
+.fleche.claire {
+  color: #13212b;
+}
+.echelle-piste {
+  position: relative;
+  height: 30px;
+}
+.echelle-piste::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px dashed var(--trait);
+}
+.echelle-point {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--encre);
+  box-shadow: 0 0 0 2px var(--surface);
+  transition: left 300ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.echelle-point.faible {
+  background: var(--surface);
+  border: 2px solid var(--encre-3);
+}
+.echelle-ref {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  border-left: 1.5px solid var(--ocean);
+}
+.echelle-valeur {
+  text-align: right;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.echelle-valeur small {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--encre-3);
+  line-height: 1.1;
+}
+.echelle-axe {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.76rem;
+  color: var(--encre-3);
+  font-variant-numeric: tabular-nums;
+  grid-column: 2;
+}
+.echelle-pied {
+  font-size: 0.82rem;
+  color: var(--encre-2);
+  margin: 0.8rem 0 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .echelle-point {
+    transition: none;
+  }
+}
+
+/* Chiffres clés : trois faits, pas un tableau de bord. */
+.faits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1.5rem 2rem;
+  margin: 2rem 0 0;
+  padding: 1.5rem 0 0;
+  border-top: 1px solid var(--trait);
+}
+.fait-valeur {
+  display: block;
+  font: 750 2rem/1.1 var(--display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.fait-texte {
+  display: block;
+  font-size: 0.93rem;
+  color: var(--encre-2);
+  margin-top: 0.3rem;
+}
+
+/* Barre des 4 états d'appariement. */
+.etats {
+  margin: 1rem 0 0.5rem;
+  max-width: 900px;
+}
+.etats-barre {
+  display: flex;
+  height: 22px;
+  gap: 2px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.etats-barre span {
+  display: block;
+  height: 100%;
+}
+.etats-liste {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem 1.5rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.etats-liste li {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  column-gap: 0.55rem;
+  max-width: none;
+}
+.etats-liste .puce {
+  width: 12px;
+  height: 12px;
+  margin-top: 0.35rem;
+  border-radius: 3px;
+}
+.etats-liste strong {
+  font: 700 1.3rem/1.2 var(--display);
+  font-variant-numeric: tabular-nums;
+}
+.etats-liste .etat-nom {
+  display: block;
+  font-weight: 700;
+}
+.etats-liste .etat-detail {
+  display: block;
+  font-size: 0.86rem;
+  color: var(--encre-2);
+}
+.motif-ambigu {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 5px,
+    rgba(19, 33, 43, 0.28) 5px 7px
+  );
+}
+
+/* Rubriques de l'accueil. */
+.rubriques {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0;
+  margin: 1rem 0 0;
+  border-top: 1px solid var(--trait);
+}
+.rubriques a {
+  display: block;
+  padding: 1.1rem 1.25rem 1.2rem 0;
+  border-bottom: 1px solid var(--trait);
+  color: var(--encre);
+  text-decoration: none;
+}
+.rubriques a strong {
+  display: block;
+  font: 700 1.12rem var(--display);
+}
+.rubriques a span {
+  display: block;
+  color: var(--encre-2);
+  font-size: 0.93rem;
+  margin-top: 0.2rem;
+}
+.rubriques a:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+/* ---------- Carte ---------- */
+.carte {
+  position: relative;
+  height: min(70vh, 560px);
+  min-height: 380px;
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.carte .maplibregl-ctrl-attrib {
+  font-size: 11px;
+}
+.carte-bulle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 2;
+  padding: 0.5rem 0.7rem;
+  background: var(--surface);
+  color: var(--encre);
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon);
+  box-shadow: 0 4px 16px rgba(19, 33, 43, 0.14);
+  font-size: 0.88rem;
+  line-height: 1.35;
+  max-width: 240px;
+}
+.carte-bulle strong {
+  display: block;
+}
+.carte-legende {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  margin: 0.7rem 0 0;
+  font-size: 0.85rem;
+  color: var(--encre-2);
+}
+.carte-legende-rampe {
+  display: flex;
+  gap: 2px;
+}
+.carte-legende-rampe span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.76rem;
+}
+.carte-legende-rampe i {
+  display: block;
+  width: 52px;
+  height: 10px;
+}
+.carte-legende-rampe span:first-child i {
+  border-radius: 3px 0 0 3px;
+}
+.carte-legende-rampe span:last-child i {
+  border-radius: 0 3px 3px 0;
+}
+.carte-sans-donnee i {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  margin-right: 0.35rem;
+  vertical-align: -1px;
+  border: 1px dashed var(--encre-3);
+}
+
+/* ---------- Tableaux ---------- */
+.tableau-conteneur {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-top: 2px solid var(--encre);
+}
+table.donnees {
+  width: 100%;
+  max-width: none;
+  border-collapse: collapse;
+  font-size: 0.94rem;
+}
+table.donnees th,
+table.donnees td {
+  padding: 0.6rem 0.8rem 0.6rem 0;
+  border-bottom: 1px solid var(--trait);
+  text-align: left;
+  vertical-align: middle;
+}
+table.donnees th {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--encre-2);
+  white-space: nowrap;
+}
+table.donnees th button {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+table.donnees th button:focus-visible {
+  outline: 2px solid var(--ocean);
+  outline-offset: 2px;
+}
+table.donnees th[aria-sort] button {
+  color: var(--encre);
+}
+table.donnees td.num,
+table.donnees th.num {
+  text-align: right;
+}
+table.donnees th.num button {
+  flex-direction: row-reverse;
+}
+table.donnees tbody tr:hover {
+  background: var(--surface);
+}
+table.donnees .commune {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.hausse {
+  color: var(--etat-trouve);
+}
+.baisse {
+  color: var(--accent);
+}
+.faible-effectif {
+  color: var(--encre-3);
+}
+.mini-barre {
+  display: flex;
+  width: 120px;
+  height: 10px;
+  gap: 1px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.mini-barre span {
+  display: block;
+  height: 100%;
+}
+
+/* ---------- Méthode ---------- */
+.etapes {
+  counter-reset: etape;
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+.etapes li {
+  counter-increment: etape;
+  position: relative;
+  padding: 0 0 1.1rem 2.6rem;
+  max-width: 72ch;
+}
+.etapes li::before {
+  content: counter(etape);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1.8rem;
+  height: 1.8rem;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--encre);
+  border-radius: 50%;
+  font: 700 0.9rem var(--display);
+}
+.etapes li::after {
+  content: "";
+  position: absolute;
+  left: 0.9rem;
+  top: 2rem;
+  bottom: 0.2rem;
+  border-left: 1px solid var(--trait);
+}
+.etapes li:last-child::after {
+  display: none;
+}
+.etapes strong {
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .etats-liste {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  #observablehq-header {
+    gap: 0.75rem;
+  }
+  .marque-lieu {
+    display: none;
+  }
+  h2 {
+    font-size: 1.35rem;
+  }
+  .echelle {
+    padding: 1rem 0.85rem;
+  }
+  .echelle-lignes {
+    grid-template-columns: 58px minmax(0, 1fr) auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+
+/* Libellés de facettes (groupes d'étiquettes) : lisibles comme des titres de colonne. */
+[aria-label="fx-axis tick label"] text {
+  font-weight: 700;
+  font-size: 13px;
+  fill: var(--encre);
+}

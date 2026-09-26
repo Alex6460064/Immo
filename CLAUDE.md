@@ -3,10 +3,10 @@
 Projet data portfolio : croiser les ventes immobilières officielles (DVF) et les diagnostics
 de performance énergétique (DPE ADEME) sur les communes du littoral Pays Basque + BAB élargi
 (liste précise dans `config/communes.py`). Objectif : un pipeline de données propre et
-documenté, un dashboard interactif, et une synthèse PDF — le tout comme preuve de
+documenté, un site interactif, et une synthèse PDF — le tout comme preuve de
 compétence data/IA pour des recruteurs.
 
-Livrables : (1) repo GitHub propre avec page READ ME explicative, (2) dashboard web interactif, (3) synthèse PDF versionnée (`reports/`, générée par `pipeline/07_report.py`).
+Livrables : (1) repo GitHub propre avec page READ ME explicative, (2) site web interactif statique (`site/`, GitHub Pages), (3) synthèse PDF versionnée (`reports/`, générée par `pipeline/07_report.py`).
 
 ---
 
@@ -67,11 +67,13 @@ Ordre de priorité (non négociable) :
 - **API BAN** (`api-adresse.data.gouv.fr`) — géocodage des adresses DVF/DPE.
 - **API ADEME** (`data-fair`, jeu `dpe-v2-logements-existants`) — récupération DPE filtrée par
   code postal.
-- **Streamlit** — dashboard, déployé sur **Streamlit Community Cloud** (live :
-  https://dvf-dpe-pays-basque.streamlit.app/). Manifeste `requirements.txt` régénéré depuis
-  `uv.lock` ; `.python-version` épinglé à `3.12` (runtime Cloud).
-- **Plotly** — graphiques + carte choroplèthe IRIS via `go.Choroplethmap` (MapLibre, sans
-  jeton). `px.choropleth_mapbox` est déprécié depuis Plotly 6 — ne pas l'utiliser.
+- **Observable Framework** (Node, `site/`) — site statique publié sur **GitHub Pages** par
+  `.github/workflows/pages.yml` (live : https://alex6460064.github.io/Immo/). Remplace le
+  dashboard Streamlit (#44). Graphes **Observable Plot**, carte choroplèthe IRIS **MapLibre GL
+  JS 4.7** (v5+ : worker ESM non chargeable via le CDN du build) + fond **OpenFreeMap** (sans
+  jeton). **Aucun calcul statistique en JS** : `pipeline/08_export_site.py` précalcule des cubes
+  JSON via `dashboard/site_export.py` (pur, testé contre `dashboard/data.py`).
+  `.python-version` épinglé à `3.12` (CI).
 - **Typst + lilaq** — mise en page et graphes de la synthèse PDF (`pipeline/07_report.py`,
   groupe de dépendances `report` ; binaire Typst embarqué).
 - **pytest + ruff** — tests (TDD) et lint, exécutés en **CI GitHub Actions** à chaque push.
@@ -131,13 +133,14 @@ commune ne doit toucher qu'un seul endroit.
 ```
 data/raw/          # téléchargements bruts, non versionné (.gitignore)
 data/processed/    # données nettoyées / jointes / agrégées
-data/dashboard/    # instantané versionné pour Streamlit Cloud (produit par 06_publish_dashboard_data)
+data/dashboard/    # instantané versionné (06_publish_dashboard_data) : source du site (08) et du PDF (07)
 data/jev/          # verdicts Jev versionnés (cache de 04c) : un clone frais rejoue sans clé API
 config/communes.py # codes INSEE ciblés
-pipeline/          # scripts I/O numérotés : download_dvf(+_historique) + download_dpe → 02_clean_dvf → 02b_geocode_ban → 03_clean_dpe → 04_join → 04b_join_iris → 04c_jev_disambiguate → 05_aggregate → 06_publish_dashboard_data → 07_report
+pipeline/          # scripts I/O numérotés : download_dvf(+_historique) + download_dpe → 02_clean_dvf → 02b_geocode_ban → 03_clean_dpe → 04_join → 04b_join_iris → 04c_jev_disambiguate → 05_aggregate → 06_publish_dashboard_data → 07_report → 08_export_site
 pipeline/lib/      # logique pure (pas d'I/O, pas de DuckDB) : normalisation, mutations, appariement, agrégats, rapport
 pipeline/report/   # template Typst de la synthèse PDF (template.typ)
-dashboard/app.py   # Streamlit + Plotly (graphes + carte choroplèthe IRIS)
+dashboard/         # seam de données testé (data.py) + cubes du site (site_export.py), sans UI
+site/              # Observable Framework : pages .md, components/ (données, graphes, carte, contrôles), style.css
 reports/           # synthèse PDF versionnée (07_report.py), livrable recruteurs
 notebooks/         # exploration ponctuelle, jamais source de vérité du pipeline
 README.md
@@ -174,16 +177,18 @@ cohérence des totaux avant/après → régression sur le dashboard.
   `C:\Users\alexa\AppData\Local\Programs\Python\Python314\python.exe` (a `duckdb` 1.5.5, **pas
   `pandas`** → `.fetchall()` sur les résultats DuckDB, jamais `.df()`). Lancer depuis la racine
   du repo pour les imports du projet. Le Python système est en 3.14 ; `.python-version` du repo
-  est épinglé à `3.12` (aligné sur le runtime Streamlit Cloud) — écart sans conséquence, la
+  est épinglé à `3.12` (aligné sur la CI) — écart sans conséquence, la
   suite pytest passe sur les deux.
-- **Dashboard périmé après un fix data** : le repo/local peut être correct alors que
-  Streamlit Cloud sert encore l'ancien build (`@st.cache_data` keyé sur les args, pas la mtime).
-  Vérifier d'abord le parquet committé ; si bon → **Reboot app + Clear cache** sur
-  share.streamlit.io, pas de rerun pipeline.
-- **Fix en aval (agrégation/publish/synthèse) = ne pas relancer download/clean/geocode/join.**
-  Seuls `05_aggregate` + `06_publish_dashboard_data` (+ `07_report` pour le PDF) sont
-  concernés ; le commit du fix versionne déjà les instantanés `data/dashboard/` et le PDF.
-  `07_report` lit `data/dashboard/`, jamais `data/processed/` : régénérable sur un clone frais.
+- **Site périmé après un fix data** : le site en ligne est reconstruit par la CI à chaque push
+  sur `main` depuis `data/dashboard/` committé. Vérifier d'abord le parquet committé puis le
+  run `pages.yml`, pas de rerun pipeline.
+- **Fix en aval (agrégation/publish/synthèse/site) = ne pas relancer download/clean/geocode/join.**
+  Seuls `05_aggregate` + `06_publish_dashboard_data` (+ `07_report` pour le PDF, `08_export_site`
+  pour le site) sont concernés ; le commit du fix versionne déjà les instantanés `data/dashboard/`
+  et le PDF. `07_report` et `08_export_site` lisent `data/dashboard/`, jamais `data/processed/`.
+- **Site en local** : Node 24 + npm fonctionnent (pas bloqués). `cd site && npx observable
+  preview`. Onglet navigateur automatisé en arrière-plan = cellules figées en chargement (le
+  runtime Observable avance au `requestAnimationFrame`) : ce n'est pas un bug du site.
 
 ## 🔧 WORKFLOW
 
@@ -198,9 +203,10 @@ python pipeline/04_join.py                 # appariement DVF↔DPE (texte → di
 python pipeline/04b_join_iris.py           # rattache chaque mutation géocodée à son IRIS
 python pipeline/04c_jev_disambiguate.py    # désambiguïsation Jev des mutations ambiguës (clé API optionnelle)
 python pipeline/05_aggregate.py            # agrégats par commune / IRIS / étiquette DPE
-python pipeline/06_publish_dashboard_data.py  # instantané versionné data/dashboard/ (déploiement Cloud)
+python pipeline/06_publish_dashboard_data.py  # instantané versionné data/dashboard/ (source du site et du PDF)
 python pipeline/07_report.py              # synthèse PDF recruteurs (reports/, lit data/dashboard/)
-streamlit run dashboard/app.py            # dashboard interactif
+python pipeline/08_export_site.py         # cubes JSON du site (site/src/data/, lit data/dashboard/)
+cd site && npm run dev                    # site interactif en local (build : npm run build)
 ```
 
 - Validation de référence : chaque script tourne sans erreur, produit une sortie non vide,

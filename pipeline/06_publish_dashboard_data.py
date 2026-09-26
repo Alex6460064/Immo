@@ -1,6 +1,6 @@
-"""(#24) Publie l'instantane de donnees lu par le dashboard sur un clone frais --
-prealable au deploiement Streamlit Community Cloud (#25), qui deploie le repo
-sans executer le pipeline.
+"""(#24) Publie l'instantane de donnees versionne : le site statique (#44, via
+`08_export_site.py`) et la synthese PDF (`07_report.py`) le lisent sur un clone
+frais, sans executer le pipeline.
 
 Regenere `data/dashboard/` (tracke par git) depuis `data/processed/` +
 `data/raw/iris_communes.geojson` : les 2 agregats + le geojson copies tels quels,

@@ -1,9 +1,9 @@
 # DVF × DPE Pays Basque
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://dvf-dpe-pays-basque.streamlit.app/)
+[![Site](https://github.com/Alex6460064/Immo/actions/workflows/pages.yml/badge.svg)](https://github.com/Alex6460064/Immo/actions/workflows/pages.yml)
 [![CI](https://github.com/Alex6460064/Immo/actions/workflows/ci.yml/badge.svg)](https://github.com/Alex6460064/Immo/actions/workflows/ci.yml)
 
-**Dashboard interactif → https://dvf-dpe-pays-basque.streamlit.app/**
+**Site interactif → https://alex6460064.github.io/Immo/**
 
 Projet portfolio *data engineering / data analysis*. Objectif : montrer un pipeline de données
 propre, reproductible et honnête sur ses limites — le code est autant la vitrine que le résultat.
@@ -34,25 +34,32 @@ n'existe pas, mais parce que les logements F et G sont surtout concentrés dans 
 centre-ville et de bord de mer** — précisément là où le m² est le plus cher. Le prix élevé de
 l'emplacement masque l'effet de l'étiquette.
 
-Beaucoup de projets cacheraient ce problème. Ici il est **mis en avant** : le dashboard et le
-PDF affichent la limite au lieu de la maquiller.
+Beaucoup de projets cacheraient ce problème. Ici il est **mis en avant** : le site et le PDF
+affichent la limite au lieu de la maquiller.
 
 ---
 
-## Ce que montre le dashboard
+## Ce que montre le site
 
-**Vue « Marché »**
-Une courbe du prix au m² par année (depuis 2016), toutes communes confondues, avec possibilité
-d'ajouter une courbe par commune pour comparer. Une **carte** colore chaque quartier selon son
-prix au m². Bascule **moyenne / médiane**, filtres période et type de bien (maison /
-appartement).
+Site statique ([Observable Framework](https://observablehq.com/framework/)) publié sur GitHub
+Pages : **https://alex6460064.github.io/Immo/**
 
-**Vue « Impact DPE »**
-Pour **une commune choisie**, le prix au m² selon le groupe d'étiquette énergie
-(A-C / D / E / F-G). Comparer une commune à une autre n'aurait pas de sens (un bien F à Biarritz
-front de mer reste plus cher qu'un bien A à Hasparren), donc la commune est obligatoire. La vue
-affiche en clair le **taux de rapprochement** DVF↔DPE et l'**avertissement** sur le décalage de
-dates entre une vente et son diagnostic.
+| Page | Contenu |
+|---|---|
+| **Accueil** | Le constat du projet sur une étiquette énergie A → G : prix médian au m² par lettre, pour les 16 communes ou une seule ; chiffres clés ; les 4 états du rapprochement DVF ↔ DPE |
+| **Marché** | Prix au m² année par année (courbe « toutes communes » + jusqu'à 5 communes comparées), médiane / moyenne, maison / appartement, période ; **carte des quartiers IRIS** (MapLibre, fond OpenFreeMap) |
+| **Impact DPE** | Pour **une commune** : prix médian par groupe d'étiquettes (A-C / D / E / F-G), détail lettre par lettre, taux de rapprochement local, avertissement sur le décalage de dates vente / diagnostic |
+| **Communes** | Tableau triable : prix médian de la dernière année, évolution depuis 2016, volumes, part d'étiquettes certaines |
+| **Méthode** | Sources, calcul du prix au m², algorithme de rapprochement, limites, liens vers les ADR |
+
+Comparer une commune à une autre sur l'impact DPE n'aurait pas de sens (un bien F à Biarritz
+front de mer reste plus cher qu'un bien A à Hasparren), donc la vue Impact DPE travaille
+toujours sur une commune. Les médianes calculées sur moins de 30 ventes sont signalées.
+
+**Aucun calcul statistique en JavaScript** : `pipeline/08_export_site.py` précalcule des cubes
+JSON en appelant les fonctions Python testées (`dashboard/data.py`, `dashboard/site_export.py`).
+Les tests vérifient, sélection par sélection, que chaque cube redonne exactement le résultat de
+ces fonctions. Le site ne fait que filtrer et afficher.
 
 ---
 
@@ -63,10 +70,10 @@ dates entre une vente et son diagnostic.
 | Pipeline de données **reproductible** et rejouable étape par étape | `pipeline/`, chaque script idempotent |
 | **Rapprochement d'enregistrements** sans identifiant commun (adresse → géocodage → surface → consensus) | `pipeline/lib/join_dvf_dpe.py`, [ADR 0003](docs/adr/0003-algorithme-appariement-dvf-dpe.md) |
 | Traitement de **gros fichiers** sans tout charger en mémoire (SQL sur fichiers) | DuckDB, partout dans `pipeline/` |
-| **Honnêteté méthodologique** : taux de correspondance, biais temporel et biais de localisation affichés, jamais masqués | dashboard, `reports/`, `NOTES.md` |
+| **Honnêteté méthodologique** : taux de correspondance, biais temporel et biais de localisation affichés, jamais masqués | site, `reports/`, `NOTES.md` |
 | **Tests** (TDD) + **intégration continue** | `tests/`, CI GitHub Actions (ruff + pytest) |
 | **Décisions d'architecture documentées** | `docs/adr/`, `CONTEXT.md`, `NOTES.md` |
-| **Déploiement** d'un dashboard public | Streamlit Community Cloud |
+| **Déploiement** d'un site public, construit par la CI | Observable Framework + GitHub Pages (`site/`, `.github/workflows/pages.yml`) |
 | **Rapport automatisé** reproductible bit à bit | `pipeline/07_report.py` → PDF Typst |
 
 ---
@@ -129,7 +136,7 @@ Aucun identifiant commun entre une vente et un diagnostic. L'appariement se fait
    du DPE inconnue mais réponse analytique certaine) → état `resolu_consensus`.
 
 Chaque mutation reçoit **un des 4 états** — `trouvé` / `resolu_consensus` / `non trouvé` /
-`ambigu` — et **les 4 taux sont publiés** (dashboard + logs), jamais agrégés pour faire joli.
+`ambigu` — et **les 4 taux sont publiés** (site + logs), jamais agrégés pour faire joli.
 Aucune mutation ambiguë n'est appariée au hasard.
 
 Sur le jeu courant : environ **trouvé 38 % / consensus 12 % / non trouvé 18 % / ambigu 32 %**.
@@ -143,8 +150,9 @@ d'un même immeuble partagent adresse et surface — l'algorithme refuse de tran
 Gestion des dépendances avec [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv sync                     # pipeline + dashboard
+uv sync                     # pipeline
 uv sync --group report      # + Typst, pour régénérer la synthèse PDF (étape 07)
+cd site && npm ci           # site statique (Node >= 20)
 git config core.hooksPath .githooks   # active le hook pre-commit (ruff, miroir CI)
 ```
 
@@ -166,22 +174,27 @@ uv run python pipeline/04c_jev_disambiguate.py     # désambiguïsation Jev des 
 uv run python pipeline/05_aggregate.py             # agrégats commune / IRIS / étiquette DPE
 uv run python pipeline/06_publish_dashboard_data.py  # instantané versionné data/dashboard/
 uv run --group report python pipeline/07_report.py   # synthèse PDF (reports/, lit data/dashboard/)
+uv run python pipeline/08_export_site.py           # données du site (site/src/data/, lit data/dashboard/)
 ```
 
 Chaque script affiche un résumé (nombre de lignes, taux de correspondance, valeurs manquantes)
 et échoue bruyamment plutôt que de produire une sortie douteuse.
 
 `data/dashboard/` est un **instantané versionné** (produit uniquement par l'étape 06) : il
-permet au dashboard et à la synthèse PDF de fonctionner sur un clone frais, **sans exécuter le
-pipeline**. L'étape 07 lit cet instantané, jamais `data/processed/`.
+permet au site et à la synthèse PDF d'être reconstruits sur un clone frais, **sans exécuter le
+pipeline**. Les étapes 07 et 08 lisent cet instantané, jamais `data/processed/`.
 
-## Dashboard
+## Site
 
 ```bash
-uv run streamlit run dashboard/app.py
+uv run python pipeline/08_export_site.py   # cubes JSON précalculés -> site/src/data/
+cd site
+npm run dev                                # aperçu local (http://127.0.0.1:3000)
+npm run build                              # site statique -> site/dist/
 ```
 
-Lit `data/processed/` si le pipeline a tourné localement, sinon l'instantané `data/dashboard/`.
+À chaque push sur `main`, le workflow `pages.yml` rejoue ces deux étapes et publie `site/dist`
+sur GitHub Pages. Un échec d'export ou de build n'écrase jamais la version en ligne.
 
 ## Synthèse PDF
 
@@ -215,6 +228,9 @@ départage par surface, agrégats, rendu du rapport. Tests d'intégration sur é
   n'existe pas avant cette date, une vente de 2017 n'a presque aucune chance d'être appariée.
   La vue « Impact DPE » ne travaille donc que sur les ventes post-réforme.
 - **~32 % d'ambigus** en habitat collectif dense — affichés tels quels, jamais résolus de force.
+- **Unité des taux d'appariement** : les 4 taux sont comptés sur les lignes de
+  `dvf_dpe_matched` (un lot DVF par ligne, commerces compris), pas sur les mutations. Le site
+  l'écrit en clair (« lots »).
 - **Décalage temporel** vente / diagnostic (une vente 2021 peut être appariée à un DPE 2024) —
   signalé en clair sur la vue.
 - **Biais de localisation** : l'étiquette DPE est corrélée à l'emplacement (ancien de centre et

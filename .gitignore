@@ -22,3 +22,9 @@ data/processed/*
 .env
 .env.*
 .streamlit/secrets.toml
+
+# Site statique (#44) : dependances, build et donnees generees par pipeline/08_export_site.py
+site/node_modules/
+site/dist/
+site/src/.observablehq/cache/
+site/src/data/
