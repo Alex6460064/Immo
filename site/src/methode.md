@@ -6,6 +6,7 @@ title: Méthode
 import {meta, communes, nombre, pourcent} from "./components/donnees.js";
 const depot = "https://github.com/Alex6460064/Immo";
 const adr = (n, slug) => `${depot}/blob/main/docs/adr/${n}-${slug}.md`;
+const decision = (n, slug) => html`<a href=${adr(n, slug)}>décision</a>`;
 ```
 
 # Méthode et limites
@@ -14,16 +15,16 @@ const adr = (n, slug) => `${depot}/blob/main/docs/adr/${n}-${slug}.md`;
 
 ## Les sources
 
-- **DVF**, fichier brut de la DGFiP : toutes les ventes immobilières, sans l'identité des parties. Les millésimes 2016-2020, sortis de la fenêtre glissante officielle, viennent du miroir communautaire cquest, chacun pris dans la dernière édition qui le contient : la première publication d'un millésime est incomplète (<a href="${adr("0005", "source-historique-dvf-2016-2020")}">décision</a>).
+- **DVF**, fichier brut de la DGFiP : toutes les ventes immobilières, sans l'identité des parties. Les millésimes 2016-2020, sortis de la fenêtre glissante officielle, viennent du miroir communautaire cquest, chacun pris dans la dernière édition qui le contient : la première publication d'un millésime est incomplète (${decision("0005", "source-historique-dvf-2016-2020")}).
 - **DPE** de l'ADEME, logements existants, **uniquement la méthode post-réforme** (depuis le ${meta.cutoff.split("-").reverse().join("/")}) : l'ancienne méthode ne donne pas des étiquettes comparables.
-- **Contours IRIS** de l'INSEE et de l'IGN pour la carte (<a href="${adr("0004", "carte-choroplethe-iris")}">décision</a>).
-- **Périmètre** : ${communes.length} communes du littoral et de l'agglomération Bayonne-Anglet-Biarritz, dont Tarnos et Ondres dans les Landes (<a href="${adr("0001", "communes-hors-dept-64")}">décision</a>).
+- **Contours IRIS** de l'INSEE et de l'IGN pour la carte (${decision("0004", "carte-choroplethe-iris")}).
+- **Périmètre** : ${communes.length} communes du littoral et de l'agglomération Bayonne-Anglet-Biarritz, dont Tarnos et Ondres dans les Landes (${decision("0001", "communes-hors-dept-64")}).
 
-Le fichier DVF brut n'a pas de coordonnées. Les adresses sont géocodées par l'API Adresse (BAN), pour les ventes comme pour les diagnostics, afin que les deux partagent la même précision (<a href="${adr("0002", "dvf-brut-plus-geocodage-ban")}">décision</a>).
+Le fichier DVF brut n'a pas de coordonnées. Les adresses sont géocodées par l'API Adresse (BAN), pour les ventes comme pour les diagnostics, afin que les deux partagent la même précision (${decision("0002", "dvf-brut-plus-geocodage-ban")}).
 
 ## Le prix au m²
 
-Il est calculé **par vente**, jamais par ligne du fichier : le prix total divisé par la somme des surfaces habitables. Le fichier DGFiP recopie le montant total sur chaque lot ; diviser par la surface d'un seul lot ferait monter une vente d'immeuble à 100 000 €/m² et fausserait tout un quartier. Seules les ventes d'un seul type de bien sont gardées, et les prix hors de 200 à 30 000 €/m² sont écartés, comptés, jamais supprimés en silence (<a href="${adr("0006", "repli-mutation-prix-m2")}">décision</a>).
+Il est calculé **par vente**, jamais par ligne du fichier : le prix total divisé par la somme des surfaces habitables. Le fichier DGFiP recopie le montant total sur chaque lot ; diviser par la surface d'un seul lot ferait monter une vente d'immeuble à 100 000 €/m² et fausserait tout un quartier. Seules les ventes d'un seul type de bien sont gardées, et les prix hors de 200 à 30 000 €/m² sont écartés, comptés, jamais supprimés en silence (${decision("0006", "repli-mutation-prix-m2")}).
 
 ## Rapprocher une vente et un diagnostic
 
@@ -34,7 +35,7 @@ Il est calculé **par vente**, jamais par ligne du fichier : le prix total divis
   <li><strong>Même étiquette</strong>Si les candidats restants ont tous la même lettre, la lettre est certaine même si le diagnostic exact ne l'est pas : c'est l'état « résolu par consensus ».</li>
 </ol>
 
-Chaque lot vendu reçoit l'un des quatre états. Aucun cas ambigu n'est tranché au hasard (<a href="${adr("0003", "algorithme-appariement-dvf-dpe")}">décision</a>).
+Chaque lot vendu reçoit l'un des quatre états. Aucun cas ambigu n'est tranché au hasard (${decision("0003", "algorithme-appariement-dvf-dpe")}).
 
 <div class="tableau-conteneur" style="max-width:640px">
 <table class="donnees">
