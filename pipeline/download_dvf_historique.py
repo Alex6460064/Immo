@@ -1,5 +1,6 @@
 """Telecharge le DVF brut DGFiP historique (millesimes 2016-2020) depuis le miroir
-cquest et le filtre sur les communes ciblees.
+cquest (derniere edition contenant chaque millesime, #45) et le filtre sur les
+communes ciblees.
 
 Voir pipeline/lib/download_dvf_historique.py pour la justification de la source
 (miroir communautaire cquest, hors fenetre glissante officielle de data.gouv.fr --
@@ -11,8 +12,8 @@ seules les lignes des communes ciblees (config/communes.py) sont ecrites sur dis
 dans le meme fichier data/raw/dvf_brut_{year}.parquet -- 02_clean_dvf.py absorbe donc
 2016-2020 par son glob existant sans aucune modification.
 
-Difference avec le flux officiel : fichiers .txt non compresses (pas de .zip a
-extraire) et alias de colonne applique (`Code service CH` -> `Identifiant de
+Difference avec le flux officiel : fichiers .txt non compresses selon l'edition
+(.txt.zip pour les plus recentes) et alias de colonne applique (`Code service CH` -> `Identifiant de
 document`, voir pipeline/lib/download_dvf_historique.py) pour matcher le schema
 attendu en aval.
 
@@ -27,6 +28,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 
 import duckdb
@@ -68,11 +70,25 @@ def download_and_filter_year(year: int, codes_insee: list[str], data_dir: Path) 
     url = historical_url_for_year(year)
 
     with tempfile.TemporaryDirectory(prefix=f"dvf_hist_{year}_") as tmp:
-        txt_path = Path(tmp) / f"valeursfoncieres-{year}.txt"
+        tmp_dir = Path(tmp)
+        download_path = tmp_dir / url.rsplit("/", 1)[-1]
 
         print(f"[{year}] telechargement depuis {url}")
-        size = _download_with_resume(url, txt_path)
+        size = _download_with_resume(url, download_path)
         print(f"[{year}] {size:,} octets telecharges")
+
+        if download_path.suffix == ".zip":
+            with zipfile.ZipFile(download_path) as zf:
+                names = zf.namelist()
+                if len(names) != 1:
+                    raise RuntimeError(
+                        f"[{year}] archive inattendue : {len(names)} fichier(s) au lieu de 1 "
+                        f"({names}) -- format du miroir probablement change, a verifier"
+                    )
+                zf.extractall(tmp_dir)
+                txt_path = tmp_dir / names[0]
+        else:
+            txt_path = download_path
 
         # Le miroir cquest n'a aucune garantie de disponibilite (ADR 0005) : on
         # verifie que le fichier est bien un DVF pipe-delimite avant de le donner a
@@ -121,7 +137,7 @@ def main() -> None:
     years = historical_years()
 
     print(f"Communes ciblees ({len(codes_insee)}) : {', '.join(codes_insee)}")
-    print(f"Millesimes historiques cibles (edition cquest avril 2021) : {years}")
+    print(f"Millesimes historiques cibles (derniere edition cquest par millesime) : {years}")
 
     summaries = []
     for year in years:

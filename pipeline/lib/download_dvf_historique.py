@@ -2,18 +2,19 @@
 glissante officielle de data.gouv.fr -- voir Rechercheavant2021.md pour la recherche
 de source et docs/adr/0005-source-historique-dvf-2016-2020.md pour la decision.
 
-Source verifiee en direct (curl) le 2026-08-26 : le miroir communautaire
-`data.cquest.org/dgfip_dvf/202104/` (Christian Quest, contributeur reconnu de
-l'open data francais) archive l'edition DGFiP d'avril 2021 -- la derniere edition
-avant que la fenetre glissante officielle n'exclue 2016. Cette edition couvre les
-millesimes 2016 a 2020 complets, au format pipe-delimited quasi identique au fichier
-officiel actuel (voir pipeline/lib/download_dvf.py) : une seule difference de schema
-constatee, la colonne `Code service CH` (miroir historique) remplace `Identifiant de
-document` (fichier officiel) -- alias gere ici, jamais silencieusement ignore.
+Source : le miroir communautaire `data.cquest.org/dgfip_dvf/` (Christian Quest,
+contributeur reconnu de l'open data francais) archive chaque edition semestrielle
+DGFiP. Un millesime est republie a chaque edition tant qu'il reste dans la fenetre
+glissante, et s'y complete (enregistrements tardifs) : sa 1re publication est
+sous-estimee (2020 dans l'edition 202104 : ~moitie des lignes, voir #45). Chaque
+millesime est donc pris dans la **derniere** edition qui le contient (verifie en
+direct le 2026-09-26, voir HISTORICAL_SOURCES).
 
-Contrairement au flux officiel (.txt.zip), ces fichiers sont des .txt non compresses
-et non decoupes par departement -- meme volume national a filtrer, pas de zip a
-extraire.
+Format pipe-delimited quasi identique au fichier officiel actuel (voir
+pipeline/lib/download_dvf.py) : les editions anciennes nomment `Code service CH` la
+colonne `Identifiant de document` -- alias gere ici, jamais silencieusement ignore.
+Les editions jusqu'a 202404 servent des .txt non compresses, les suivantes des
+.txt.zip.
 
 Ce module ne contient que la logique pure (URL par millesime, millesimes couverts,
 alias de colonne), testable sans reseau. `output_path_for_year`/`should_download`
@@ -27,13 +28,18 @@ from __future__ import annotations
 # meme convention de cache/nommage que le flux officiel, pas de logique dupliquee.
 from pipeline.lib.download_dvf import output_path_for_year, should_download  # noqa: F401
 
-# Edition cquest d'avril 2021 : derniere edition de la fenetre glissante officielle
-# a couvrir 2016 (voir Rechercheavant2021.md section 2a, verifie en direct).
-HISTORICAL_EDITION_URL = "http://data.cquest.org/dgfip_dvf/202104"
+CQUEST_BASE_URL = "http://data.cquest.org/dgfip_dvf"
 
-# Millesimes couverts par cette edition -- seule source de verite sur ces bornes,
-# aucune autre valeur codee en dur ailleurs dans le pipeline pour ce lot historique.
-HISTORICAL_YEARS: tuple[int, ...] = (2016, 2017, 2018, 2019, 2020)
+# Millesime -> (edition, extension) : derniere edition cquest contenant le millesime
+# (#45). Seule source de verite sur les bornes du lot historique.
+HISTORICAL_SOURCES: dict[int, tuple[str, str]] = {
+    2016: ("202110", "txt"),
+    2017: ("202204", "txt"),
+    2018: ("202304", "txt"),
+    2019: ("202404", "txt"),
+    2020: ("202504", "txt.zip"),
+}
+HISTORICAL_YEARS: tuple[int, ...] = tuple(sorted(HISTORICAL_SOURCES))
 
 # Difference de schema constatee entre le miroir historique et le fichier officiel
 # actuel (voir docstring du module) : alias applique a l'ecriture du parquet, jamais
@@ -120,24 +126,24 @@ def require_downstream_columns(columns: list[str]) -> None:
 
 
 def historical_years() -> list[int]:
-    """Millesimes disponibles sur l'edition cquest utilisee, tries par annee croissante."""
-    return sorted(HISTORICAL_YEARS)
+    """Millesimes du lot historique, tries par annee croissante."""
+    return list(HISTORICAL_YEARS)
 
 
 def historical_url_for_year(year: int) -> str:
-    """URL du fichier .txt du miroir cquest pour un millesime donne.
+    """URL du fichier (.txt ou .txt.zip) du miroir cquest pour un millesime donne.
 
-    Leve ValueError si `year` n'est pas couvert par HISTORICAL_EDITION_URL --
-    mieux vaut un echec explicite qu'une URL construite pour un millesime que
-    l'edition ne contient pas (voir Rechercheavant2021.md : chaque edition ne
-    couvre que sa propre fenetre glissante).
+    Leve ValueError si `year` n'est pas dans HISTORICAL_SOURCES -- mieux vaut un
+    echec explicite qu'une URL construite pour un millesime qu'aucune edition
+    retenue ne contient (chaque edition ne couvre que sa fenetre glissante).
     """
-    if year not in HISTORICAL_YEARS:
+    if year not in HISTORICAL_SOURCES:
         raise ValueError(
-            f"Millesime {year} non couvert par l'edition cquest {HISTORICAL_EDITION_URL} "
+            f"Millesime {year} hors du lot historique cquest "
             f"(millesimes disponibles : {historical_years()})"
         )
-    return f"{HISTORICAL_EDITION_URL}/valeursfoncieres-{year}.txt"
+    edition, extension = HISTORICAL_SOURCES[year]
+    return f"{CQUEST_BASE_URL}/{edition}/valeursfoncieres-{year}.{extension}"
 
 
 def alias_historical_columns(columns: list[str]) -> list[str]:

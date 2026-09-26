@@ -14,7 +14,7 @@ const adr = (n, slug) => `${depot}/blob/main/docs/adr/${n}-${slug}.md`;
 
 ## Les sources
 
-- **DVF**, fichier brut de la DGFiP : toutes les ventes immobilières, sans l'identité des parties. Le millésime 2016-2020 vient du miroir communautaire cquest (<a href="${adr("0005", "source-historique-dvf-2016-2020")}">décision</a>).
+- **DVF**, fichier brut de la DGFiP : toutes les ventes immobilières, sans l'identité des parties. Les millésimes 2016-2020, sortis de la fenêtre glissante officielle, viennent du miroir communautaire cquest, chacun pris dans la dernière édition qui le contient : la première publication d'un millésime est incomplète (<a href="${adr("0005", "source-historique-dvf-2016-2020")}">décision</a>).
 - **DPE** de l'ADEME, logements existants, **uniquement la méthode post-réforme** (depuis le ${meta.cutoff.split("-").reverse().join("/")}) : l'ancienne méthode ne donne pas des étiquettes comparables.
 - **Contours IRIS** de l'INSEE et de l'IGN pour la carte (<a href="${adr("0004", "carte-choroplethe-iris")}">décision</a>).
 - **Périmètre** : ${communes.length} communes du littoral et de l'agglomération Bayonne-Anglet-Biarritz, dont Tarnos et Ondres dans les Landes (<a href="${adr("0001", "communes-hors-dept-64")}">décision</a>).

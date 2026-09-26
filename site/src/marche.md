@@ -52,7 +52,7 @@ const totalVentes = typesAffiches.reduce((s, t) => s + serieGlobale(t, lo, hi).r
 <figure class="graphe">
   ${series.length > 1 ? legendeSeries(series) : ""}
   ${series.length ? resize((width) => courbePrix(series, {width, stat})) : html`<p class="vide">Aucune vente pour cette sélection.</p>`}
-  <figcaption>${nombre(totalVentes)} ventes sur la période, toutes communes${deux ? " ; trait plein : appartements, tirets : maisons" : ""}. Survolez un point pour l'effectif ; sous ${EFFECTIF_FAIBLE} ventes, une valeur annuelle bouge beaucoup. ${annees.includes("2020") ? "L'année 2020 compte environ deux fois moins de ventes que les autres dans le fichier source ; la part des confinements et celle d'un fichier incomplet n'est pas établie ici." : ""}</figcaption>
+  <figcaption>${nombre(totalVentes)} ventes sur la période, toutes communes${deux ? " ; trait plein : appartements, tirets : maisons" : ""}. Survolez un point pour l'effectif ; sous ${EFFECTIF_FAIBLE} ventes, une valeur annuelle bouge beaucoup. ${annees.at(-1)} est une première publication DGFiP : les ventes enregistrées tardivement s'y ajouteront aux éditions suivantes, son effectif est donc légèrement sous-estimé.</figcaption>
 </figure>
 
 ## Prix au m² par quartier

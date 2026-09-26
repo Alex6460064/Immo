@@ -4,7 +4,7 @@ millesime, millesimes couverts, alias de colonne), aucun appel reseau reel ici."
 import pytest
 
 from pipeline.lib.download_dvf_historique import (
-    HISTORICAL_EDITION_URL,
+    CQUEST_BASE_URL,
     alias_historical_columns,
     historical_url_for_year,
     historical_years,
@@ -18,7 +18,17 @@ def test_historical_years_couvre_2016_a_2020():
 
 
 def test_historical_url_for_year_construit_l_url_attendue():
-    assert historical_url_for_year(2018) == f"{HISTORICAL_EDITION_URL}/valeursfoncieres-2018.txt"
+    assert historical_url_for_year(2018) == f"{CQUEST_BASE_URL}/202304/valeursfoncieres-2018.txt"
+
+
+def test_historical_url_for_year_prend_la_derniere_edition_de_chaque_millesime():
+    # #45 : la 1re publication d'un millesime est incomplete (2020 dans 202104 :
+    # ~moitie des lignes) -- chaque annee vient de la derniere edition qui la contient.
+    assert historical_url_for_year(2016) == f"{CQUEST_BASE_URL}/202110/valeursfoncieres-2016.txt"
+    assert historical_url_for_year(2019) == f"{CQUEST_BASE_URL}/202404/valeursfoncieres-2019.txt"
+    assert (
+        historical_url_for_year(2020) == f"{CQUEST_BASE_URL}/202504/valeursfoncieres-2020.txt.zip"
+    )
 
 
 def test_historical_url_for_year_leve_value_error_hors_edition():

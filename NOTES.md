@@ -335,9 +335,10 @@ Plotly et `requirements.txt` (manifeste Cloud, cf. #25) sont retirés.
   aucun point Impact DPE n'est antérieur au cutoff, donc [2016, 2023] ≡ [2021, 2023]
   (`cube_start_year`, testé). Les comptages (retenues / consensus / pré-réforme exclus) sont
   exportés par année et sommés côté site (additifs sur des années disjointes, testé).
-- **Tableau des communes** : évolution de la médiane sur toute la période (2016 → dernière
-  année), pas sur 5 ans — la base à 5 ans tomberait sur 2020, année à volume anormalement bas
-  dans le fichier source (≈ moitié des autres années, cause non établie).
+- **Tableau des communes** : évolution du prix moyen au m² (la médiane jusqu'au passage à la
+  moyenne, commit 5b5918a) sur toute la période (2016 → dernière
+  année), pas sur 5 ans. (Motif initial : la base à 5 ans tombait sur 2020, à volume
+  anormalement bas ; cause établie et corrigée depuis, voir #45 ci-dessous.)
 - **Unité des taux d'appariement** : `load_matching_counts` compte les lignes de
   `dvf_dpe_matched` (56 929), pas les mutations (≈ 48 000 clés distinctes), et ces lignes
   incluent ~4 300 locaux commerciaux. L'ancien dashboard les appelait « mutations ». Le site
@@ -347,3 +348,22 @@ Plotly et `requirements.txt` (manifeste Cloud, cf. #25) sont retirés.
   quantiles (7 paliers), rampe inversée en thème sombre.
 - **#43** (filtre en langage naturel via Jev) supposait une clé API côté serveur Streamlit :
   un site statique n'a pas de secret, le ticket est à recadrer.
+
+## 2026-09-26 — Millésime 2020 tronqué : première publication DGFiP (#45)
+
+Le DVF 2020 venait de l'édition cquest 202104, **première publication** de ce millésime :
+6 108 lignes brutes sur les communes ciblées contre 13 315 dans l'édition 202504 (second
+semestre quasi vide). Correctif : chaque millésime historique pris dans la dernière édition
+cquest qui le contient ([ADR 0005](docs/adr/0005-source-historique-dvf-2016-2020.md),
+amendement).
+
+**Périodicité officielle** (API data.gouv, vérifiée le 2026-09-26) : `frequency = semiannual`,
+éditions d'avril (millésime N-1 complet) et d'octobre (1er semestre de l'année en cours),
+fenêtre glissante 2021-2025 à ce jour, dernière mise à jour 2026-04-05. Aucune donnée 2026
+avant l'édition d'octobre 2026.
+
+**Biais résiduel connu** : la première publication d'un millésime est sous-estimée. 2025
+(publié pour la 1re fois en avril 2026) ne montre pas de trou mensuel visible (profil
+mois par mois comparable à 2024), mais ses effectifs grossiront légèrement aux éditions
+suivantes ; le site le signale sous la courbe du marché. Même chose pour 2026 S1 quand il
+sera intégré.
